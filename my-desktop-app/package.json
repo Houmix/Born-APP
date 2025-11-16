@@ -39,7 +39,24 @@
       }
     ],
     "win": {
-      "target": "portable"
+      "target": [
+        "nsis"
+      ],
+      "icon": "icon.ico",
+      "verifyUpdateCodeSignature": false,
+      "signAndEditExecutable": false,
+      "signtoolOptions": {
+        "sign": false
+      }
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true, 
+      "perMachine": true,
+      "installerIcon": "icon.ico",
+      "uninstallerIcon": "icon.ico"
     },
     "mac": {
       "target": "dir"
