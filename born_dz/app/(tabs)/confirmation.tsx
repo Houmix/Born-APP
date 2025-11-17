@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router'; // Assure-toi d'utiliser un routeur comme celui de Next.js ou React Navigation
-
+import { POS_URL } from "@/config";
 export default function ConfirmationPage() {
   const router = useRouter(); // Utilise le hook de routeur pour la redirection
 

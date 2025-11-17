@@ -4,8 +4,7 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { POS_URL } from "../../config";
-
+import { POS_URL } from "@/config";
 import { useEffect } from "react";
 
 export default function IndexScreen() {
@@ -46,11 +45,7 @@ export default function IndexScreen() {
   }
   return (
     <View style={styles.main}>
-      <View style={styles.textBox}>
-        <Text style={styles.title}>
-          Choisissez une option :
-        </Text>
-      </View>
+      
 
       <View style={styles.container}>
         <TouchableOpacity 
@@ -74,44 +69,43 @@ export default function IndexScreen() {
 
 
 const styles = StyleSheet.create({
-
     main: {
-        flex:1,
-        flexDirection:'column',
-        display:"flex",
+        flex: 1,
+        flexDirection: 'column',
+        display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "#f4f4f4",
-        
+        backgroundColor: "white", // Ajout de la couleur de fond blanche
     },
     textBox: {
-        height:"20%",
-        flexDirection:"row",
-        display:"flex",
+        height: "20%",
+        flexDirection: "row",
+        display: "flex",
         justifyContent: "center",
         alignItems: 'center',
     },
     container: {
-        height:"70%",
-        width:"45%",
-        flexDirection:"row",
-        display:"flex",
+        height: "70%",
+        width: "45%",
+        flexDirection: "row",
+        display: "flex",
         justifyContent: "center",
         alignItems: "center",
         gap: 20, // Espacement entre les boutons
-        backgroundColor: "#f4f4f4",
+        backgroundColor: "white",
     },
     box: {
         width: "100%",
         height: "100%",
         backgroundColor: "white",
         borderRadius: 15,
-        display:"flex",
+        display: "flex",
         justifyContent: "center",
         alignItems: "center",
+        borderBlockColor: "black",
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.5,
         shadowRadius: 5,
         elevation: 5, // Ombre pour Android
     },
@@ -119,7 +113,7 @@ const styles = StyleSheet.create({
         color: "black",
         fontSize: 30,
         fontWeight: "bold",
-        textDecorationLine:"underline",
+        textDecorationLine: "underline",
     },
     text: {
         color: "black",

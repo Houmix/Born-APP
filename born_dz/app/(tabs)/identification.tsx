@@ -3,6 +3,7 @@ import { Text, View, StyleSheet, TextInput,TouchableOpacity } from "react-native
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage'; //AsyncStorage.setItem(clé,valeur) et .getItem(clé) pour stocker ou récupérer des données dans la sessions
 import { useNavigation } from "expo-router";
+import { POS_URL } from "@/config";
 export default function identificationScreen(){
     const navigation = useNavigation() //Pour la redirection (navigation.navigate("NomDeLaPage"))
     const [errorMessage, setErrorMessage] = useState("") //Pour afficher un message d'erreur
@@ -37,6 +38,7 @@ export default function identificationScreen(){
     const handleSubmit = async () => { //Récupération des données de l'utilisateur
         try {
             const accessToken = await postCustomerToken() //Récupération du token
+            console.log("POS URL:", POS_URL);
             const response = await axios.get(`${POS_URL}/user/api/getUser/${phoneNumber}`, {
                 headers: {
                     Authorization: `Bearer ${accessToken}` //Token inséré dans la requête
@@ -65,10 +67,7 @@ export default function identificationScreen(){
     return (
         <View style={styles.main}>
          <View style={styles.textBox}>
-           {/* Titre */}
-           <Text style={styles.title}>
-             Entrez votre numéro :
-           </Text>
+           
            {errorMessage && <Text style={{ color: 'red', marginBottom: 10 }}>{errorMessage}</Text>}
         
            <TextInput
@@ -95,7 +94,8 @@ const styles = StyleSheet.create({
         flexDirection:'column',
         display:"flex",
         justifyContent: "center",
-        alignItems: "center"
+        alignItems: "center",
+        backgroundColor: "white",
         
     },
     textBox: {
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         gap: 20, // Espacement entre les boutons
-        backgroundColor: "#f4f4f4",
+        backgroundColor: "white",
     },
     box: {
         width: "100%",
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
+        shadowOpacity: 0.5,
         shadowRadius: 5,
         elevation: 5, // Ombre pour Android
     },
@@ -147,12 +147,16 @@ const styles = StyleSheet.create({
         textDecorationLine: "none", // Supprime le soulignement du lien
     },
     input: {
+        width: "100%",
         height: 60,
-        margin: 12,
         borderWidth: 1,
-        padding: 10,
-        fontSize:20,
-      },
+        borderColor: "#ccc",
+        borderRadius: 10,
+        padding: 15,
+        fontSize: 20,
+        backgroundColor: "#fff",
+        marginBottom: 20,
+    },
       button: {
         backgroundColor: "white",
         margin: 10,

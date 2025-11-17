@@ -1,4 +1,5 @@
 import {Text, View, StyleSheet} from 'react-native';
+import { POS_URL } from "@/config";
 export default function OrderScreen() {
     return (
         <View style={styles.container}>

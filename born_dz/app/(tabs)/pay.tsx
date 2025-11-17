@@ -4,6 +4,7 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AntDesign from '@expo/vector-icons/AntDesign';
+import { POS_URL } from "@/config";
 import { useEffect, useState } from "react";export default function IndexScreen() {
     // ✅ Pay.js
 const router = useRouter();
@@ -129,7 +130,7 @@ const styles = StyleSheet.create({
         display:"flex",
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "#f4f4f4",
+        backgroundColor: "white",
         
     },
     textBox: {
@@ -147,7 +148,7 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         alignItems: "center",
         gap: 20, // Espacement entre les boutons
-        backgroundColor: "#f4f4f4",
+        backgroundColor: "white",
     },
     box: {
         width: "100%",

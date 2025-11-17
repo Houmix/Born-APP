@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import AntDesign from '@expo/vector-icons/AntDesign';
+import { POS_URL } from "@/config";
 export default function MenuStepsScreen() {
     const {menuId} = useLocalSearchParams(); //Récupère l'ID enregistré juste avant
     const {menuName} = useLocalSearchParams(); //Récupère l'ID enregistré juste avant
@@ -135,9 +136,9 @@ export default function MenuStepsScreen() {
     
     
     return (
-        <View style={{ flex: 1, padding: 16 }}>
+        <View style={styles.container}>
           {/* Barre du haut avec le bouton Home */}
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 20 }}>
+          <View style={styles.header}>
             <TouchableOpacity
               style={{
                 padding: 12,
@@ -203,9 +204,9 @@ export default function MenuStepsScreen() {
                     
                   }}
                 >
-                  <Text style={{ color: "#fff",fontSize:35 }}>Précédent</Text>
+                  <Text style={{ color: "#fff",fontSize:30, padding:20, borderRadius:8 }}>Précédent</Text>
                 </TouchableOpacity>
-                <Text style={{ fontSize: 35, fontWeight: "bold", marginBottom: 8 }}>
+                <Text style={{ fontSize: 45, fontWeight: "bold", marginBottom: 8, padding:20 }}>
                   {currentStep.name}
                 </Text>
                 {currentStepIndex < steps.length - 1 ? (
@@ -214,13 +215,14 @@ export default function MenuStepsScreen() {
                     disabled={!isStepValid(currentStep)}
                     style={[
                       {
+                        padding:12,
                         backgroundColor: !isStepValid(currentStep) ? "#ccc" : "#28a745",
                         borderRadius: 8,
                         
                       },
                     ]}
                   >
-                    <Text style={{ padding: 20, color: "#fff", borderRadius: 8, fontSize:35 }}>Suivant</Text>
+                    <Text style={{ padding: 20, color: "#fff", borderRadius: 8, fontSize:30 }}>Suivant</Text>
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity
@@ -229,7 +231,7 @@ export default function MenuStepsScreen() {
                     style={[
                       styles.goToCartButton,
                       {
-                        backgroundColor: !areAllStepsValid() ? "#ccc" : "orange", // Change la couleur en fonction de la validité
+                        backgroundColor: !areAllStepsValid() ? "#ccc" : "green", // Change la couleur en fonction de la validité
                       },
                     ]}
                   >
@@ -256,12 +258,12 @@ export default function MenuStepsScreen() {
     const styles = StyleSheet.create({
       container: {
         flex: 1,
-        backgroundColor: "#f4f4f4",
+        padding: 16,
+        backgroundColor: "white",
       },
       /* 🛒 Barre du haut */
       header: {
         height: 60,
-        backgroundColor: "#093e80",
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
@@ -289,7 +291,7 @@ export default function MenuStepsScreen() {
         backgroundColor: "white",
       },
       selectedCategory: {
-        backgroundColor: "#d9d5d4",
+        backgroundColor: "white",
       },
       categoryText: {
         color: "black",

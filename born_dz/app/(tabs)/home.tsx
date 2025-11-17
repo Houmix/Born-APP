@@ -1,13 +1,10 @@
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-
+import { POS_URL } from "@/config";
 export default function HomeScreen() {
   return (
     <View style={styles.main}>
         <View style={styles.container2}>
-            {/* Titre */}
-            <Text style={styles.text2}>
-                Choisissez une option :
-            </Text>
+            
         </View>
         
         <View style={styles.container}>
@@ -18,7 +15,7 @@ export default function HomeScreen() {
 
             {/* Bouton Commander */}
             <TouchableOpacity style={styles.box}>
-                <Text>hshsh</Text>
+                <Text></Text>
             </TouchableOpacity>
         </View>
     </View>
@@ -34,7 +31,6 @@ const styles = StyleSheet.create({
         display:"flex",
         justifyContent: "center",
         alignItems: "center",
-        backgroundColor: "#f4f4f4",
         
     },
     container2: {
