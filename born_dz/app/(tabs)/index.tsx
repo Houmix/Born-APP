@@ -4,7 +4,7 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { POS_URL } from "@/config";
+import { POS_URL, idRestaurant } from "@/config";
 import { useEffect } from "react";
 
 export default function IndexScreen() {
@@ -13,7 +13,7 @@ export default function IndexScreen() {
   // Fonction pour récupérer le token
   const getToken = async () => {
     try {
-      const response = await axios.post('${POS_URL}/user/api/employee/token/', {
+      const response = await axios.post(`${POS_URL}/user/api/employee/token/`, {
         email: "test@outlook.fr",
         password: "test"
       });

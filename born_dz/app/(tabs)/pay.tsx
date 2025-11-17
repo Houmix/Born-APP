@@ -4,7 +4,7 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import { POS_URL } from "@/config";
+import { idRestaurant, POS_URL } from "@/config";
 import { useEffect, useState } from "react";export default function IndexScreen() {
     // ✅ Pay.js
 const router = useRouter();
@@ -40,11 +40,11 @@ const card = async () => {
         user: userId, // Assurez-vous que userId est récupéré correctement
         items: order,  // ordre est un tableau déjà bien structuré
         
-        restaurant:1,// Assurez-vous que restaurantId est récupéré correctement
+        restaurant:idRestaurant,// Assurez-vous que restaurantId est récupéré correctement
     }
         const accessToken = await AsyncStorage.getItem("token");
         const response = await axios.post(
-        `${POS_URL}/order/api/createOrder/1/`,
+        `${POS_URL}/order/api/createOrder//`,
         dataToSend,
         {
         headers: {
@@ -73,7 +73,7 @@ const card = async () => {
                 user: userId, // Assurez-vous que userId est récupéré correctement
                 items: order,  // ordre est un tableau déjà bien structuré
                 
-                restaurant: 1, // Assurez-vous que restaurantId est récupéré correctement
+                restaurant: idRestaurant, // Assurez-vous que restaurantId est récupéré correctement
               };
             console.log("Données à envoyer :", dataToSend);
             const accessToken = await AsyncStorage.getItem("token");

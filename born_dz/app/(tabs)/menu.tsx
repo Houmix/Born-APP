@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { POS_URL } from "@/config";
+import { POS_URL, idRestaurant } from "@/config";
 import Feather from '@expo/vector-icons/Feather';
 
 export default function MenuScreen() {
@@ -69,7 +69,7 @@ export default function MenuScreen() {
       try {
         setIsLoading(true);
         const accessToken = await AsyncStorage.getItem("token");
-        const response = await axios.get(`${POS_URL}/menu/api/getGroupMenuList/1/`, {
+        const response = await axios.get(`${POS_URL}/menu/api/getGroupMenuList/${idRestaurant}/`, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
@@ -95,7 +95,7 @@ export default function MenuScreen() {
     const GetMenu = async () => {
       try {
         const accessToken = await AsyncStorage.getItem("token");
-        const response = await axios.get(`${POS_URL}/menu/api/getAllMenu/1/`, {
+        const response = await axios.get(`${POS_URL}/menu/api/getAllMenu/${idRestaurant}/`, {
           headers: {
             Authorization: `Bearer ${accessToken}`,
           },
