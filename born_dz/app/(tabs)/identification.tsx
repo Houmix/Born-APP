@@ -71,12 +71,34 @@ export default function identificationScreen(){
            {errorMessage && <Text style={{ color: 'red', marginBottom: 10 }}>{errorMessage}</Text>}
         
            <TextInput
-                style={styles.input}
-                placeholder="Numéro de téléphone"
-                keyboardType="numeric"
-                value={phoneNumber}  // Lier la valeur du champ à l'état
-                onChangeText={setPhoneNumber}  // Mettre à jour l'état lors de la saisie
+            style={styles.input}
+            placeholder="Numéro de téléphone"
+            keyboardType="numeric"
+            value={phoneNumber}  // Lier la valeur du champ à l'état
+            onChangeText={setPhoneNumber}  // Mettre à jour l'état lors de la saisie
+            editable={false} // Rendre le champ non éditable directement
             />
+            <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center" }}>
+            {[[1, 2, 3, 4, 5], [6, 7, 8, 9, 0]].map((row, rowIndex) => (
+                <View key={rowIndex} style={{ flexDirection: "row", justifyContent: "center" }}>
+                    {row.map((num) => (
+                        <TouchableOpacity
+                            key={num}
+                            style={[styles.button, { width: 60, height: 60, margin: 5 }]}
+                            onPress={() => setPhoneNumber((prev) => prev + num.toString())}
+                        >
+                            <Text style={styles.txtBtn}>{num}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            ))}
+            <TouchableOpacity
+                style={[styles.button, { width: 60, height: 60, margin: 5 }]}
+                onPress={() => setPhoneNumber((prev) => prev.slice(0, -1))} // Supprimer le dernier chiffre
+            >
+                <Text style={styles.txtBtn}>⌫</Text>
+            </TouchableOpacity>
+            </View>
             <TouchableOpacity style={styles.button} onPress={handleSubmit}>
             <Text style={styles.txtBtn}>Confirmer</Text>
             </TouchableOpacity>
@@ -84,7 +106,7 @@ export default function identificationScreen(){
             <Text style={styles.txtBtn}>Ignorer</Text>
             </TouchableOpacity>
          </View>
-    </View>
+        </View>
     )
    
 }

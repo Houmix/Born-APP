@@ -325,7 +325,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f4f4f4", // Couleur de fond douce
   },
   emptyCart: {
-    fontSize: 30,
+    fontSize: 60,
     textAlign: "center",
     marginBottom: 20,
     color: "#888", // Couleur du texte
@@ -358,6 +358,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   addMoreText: {
+    fontSize:30,
     color: "white",
     fontWeight: "bold",
     textAlign: "center",
