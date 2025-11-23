@@ -9,17 +9,17 @@ import { useEffect } from "react";
 
 export default function IndexScreen() {
   const router = useRouter();
-  
+
+
   // Fonction pour récupérer le token
   const getToken = async () => {
     try {
-      const response = await axios.post(`${POS_URL}/user/api/employee/token/`, {
-        email: "test@outlook.fr",
-        password: "test"
-      });
-      if (response.status == 200) {
+      const response = await axios.post(`${POS_URL}/user/api/user/token/0`) // Get car dans le back c'est du get + Num dans la requete car ce n'est pas une donnée semsible (dans urls, il y a un slug)
+      if (response.status == 200 || response.status == 201) {
         console.log(response);
-        AsyncStorage.setItem("Token",response.data.access)
+        AsyncStorage.setItem("token",response.data.access);
+        console.log("token stored");
+        console.log(response.data.access);
       } else {
         console.log("bad");
       }
@@ -32,17 +32,6 @@ export default function IndexScreen() {
   useEffect(() => {
     getToken();
   }, []);
-
-  const getGroupMenu = async () => {
-    try {
-      const id_restaurant = 2 //A definir
-      const response = await axios.get(`${POS_URL}/user/api/api/getGroupMenuList/${id_restaurant}`,{
-        
-      })
-    } catch (error) {
-      console.log(error)
-    }
-  }
   return (
     <View style={styles.main}>
       

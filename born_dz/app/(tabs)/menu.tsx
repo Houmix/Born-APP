@@ -18,13 +18,13 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { POS_URL, idRestaurant } from "@/config";
 import Feather from '@expo/vector-icons/Feather';
-
+import { useBorneSync } from "@/hooks/useBorneSync.js";
 export default function MenuScreen() {
   const router = useRouter();
-  const [categories, setCategories] = useState([]);
+  //const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [menus, setMenus] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  //const [menus, setMenus] = useState([]);
+  //const [isLoading, setIsLoading] = useState(true);
   const [cartCount, setCartCount] = useState(0); // État pour le compteur du panier
 
   // --- NOUVEAUX ÉTATS POUR LA MODALE ---
@@ -62,55 +62,59 @@ export default function MenuScreen() {
 
 
   // --- USE EFFECT (INCHANGÉ) ---
-  useEffect(() => {
-    updateCartCount();
 
-    const GetCategorie = async () => {
-      try {
-        setIsLoading(true);
-        const accessToken = await AsyncStorage.getItem("token");
-        const response = await axios.get(`${POS_URL}/menu/api/getGroupMenuList/${idRestaurant}/`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
+  const { categories, menus, isLoading } = useBorneSync();
+  // useEffect(() => {
+  //   updateCartCount();
 
-        const availableCategories = response.data.filter((category) => category.avalaible);
-        setCategories(availableCategories);
+  //   const GetCategorie = async () => {
+  //     try {
+  //       setIsLoading(true);
+  //       const accessToken = await AsyncStorage.getItem("token");
+  //       const response = await axios.get(`${POS_URL}/menu/api/getGroupMenuList/${idRestaurant}/`, {
+  //         headers: {
+  //           Authorization: `Bearer ${accessToken}`,
+  //         },
+  //       });
 
-        if (availableCategories.length > 0) {
-          setSelectedCategory(availableCategories[0]);
-        }
+  //       const availableCategories = response.data.filter((category) => category.avalaible);
+  //       setCategories(availableCategories);
 
-        await AsyncStorage.setItem("GroupMenu", JSON.stringify(availableCategories));
-      } catch (error) {
-        console.error("Erreur lors de la récupération des catégories", error);
-        Alert.alert("Erreur", "Impossible de charger les catégories.");
-      } 
-    };
-    GetCategorie();
-  }, []);
+  //       if (availableCategories.length > 0) {
+  //         setSelectedCategory(availableCategories[0]);
+  //       }
 
-  useEffect(() => {
-    const GetMenu = async () => {
-      try {
-        const accessToken = await AsyncStorage.getItem("token");
-        const response = await axios.get(`${POS_URL}/menu/api/getAllMenu/${idRestaurant}/`, {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        });
-        setMenus(response.data);
-        await AsyncStorage.setItem("Menu", JSON.stringify(response.data));
-      } catch (error) {
-        console.error("Erreur lors de la récupération des menus", error);
-        Alert.alert("Erreur", "Impossible de charger les menus.");
-      } finally {
-        setIsLoading(false); 
-      }
-    };
-    GetMenu();
-  }, []);
+  //       await AsyncStorage.setItem("GroupMenu", JSON.stringify(availableCategories));
+  //     } catch (error) {
+  //       console.error("Erreur lors de la récupération des catégories", error);
+  //       Alert.alert("Erreur", "Impossible de charger les catégories.");
+  //     } 
+  //   };
+  //   GetCategorie();
+  // }, []);
+
+  
+
+  // useEffect(() => {
+  //   const GetMenu = async () => {
+  //     try {
+  //       const accessToken = await AsyncStorage.getItem("token");
+  //       const response = await axios.get(`${POS_URL}/menu/api/getAllMenu/${idRestaurant}/`, {
+  //         headers: {
+  //           Authorization: `Bearer ${accessToken}`,
+  //         },
+  //       });
+  //       setMenus(response.data);
+  //       await AsyncStorage.setItem("Menu", JSON.stringify(response.data));
+  //     } catch (error) {
+  //       console.error("Erreur lors de la récupération des menus", error);
+  //       Alert.alert("Erreur", "Impossible de charger les menus.");
+  //     } finally {
+  //       setIsLoading(false); 
+  //     }
+  //   };
+  //   GetMenu();
+  // }, []);
   // -----------------------------
 
 
@@ -302,33 +306,37 @@ export default function MenuScreen() {
         <ScrollView style={[styles.sidebar, { width: sidebarWidth }]} contentContainerStyle={styles.sidebarContent}>
           {categories
             .filter((category) => category.avalaible)
-            .map((category) => (
+            .sort((a, b) => a.position - b.position) // Trie les catégories par le champ "position"
+            .map((category, index) => (
               <TouchableOpacity
-                key={category.id}
-                style={[
-                  styles.categoryButton,
-                  selectedCategory?.id === category.id && styles.selectedCategory,
-                ]}
-                onPress={() => setSelectedCategory(category)}
+          key={category.id}
+          style={[
+            styles.categoryButton,
+            selectedCategory?.id === category.id && styles.selectedCategory,
+          ]}
+          onPress={() => setSelectedCategory(category)}
               >
-                {/* Affiche l'image uniquement si elle est disponible ET si vous le souhaitez */}
-                {category.photo && (
-                  <Image
-                    source={{ uri: `${POS_URL}${category.photo}` }}
-                    style={styles.categoryImage}
-                  />
-                )}
-                <Text 
-                  style={[
-                    styles.categoryText,
-                    selectedCategory?.id === category.id && styles.selectedCategoryText 
-                  ]}
-                >
-                  {category.name}
-                </Text>
+          {/* Affiche l'image uniquement si elle est disponible ET si vous le souhaitez */}
+          {category.photo && (
+            <Image
+              source={{ uri: `${POS_URL}${category.photo}` }}
+              style={styles.categoryImage}
+            />
+          )}
+          <Text 
+            style={[
+              styles.categoryText,
+              selectedCategory?.id === category.id && styles.selectedCategoryText 
+            ]}
+          >
+            {category.name}
+          </Text>
               </TouchableOpacity>
             ))}
         </ScrollView>
+
+        {/* Sélectionne automatiquement la première catégorie après le tri */}
+        {selectedCategory === null && categories.length > 0 && setSelectedCategory(categories.sort((a, b) => a.position - b.position)[0])}
 
         {/* Grille des menus */}
         <View style={[styles.menuGridContainer, { width: `${menuGridWidth}%` }]}>
@@ -338,29 +346,29 @@ export default function MenuScreen() {
             </View>
           ) : (
             <FlatList
-              data={filteredMenus}
+              data={filteredMenus.sort((a, b) => a.position - b.position)} // Trie les menus par le champ "position"
               numColumns={numColumns}
               key={numColumns} // Force le re-rendu si le nombre de colonnes change
               keyExtractor={(item) => item.id.toString()}
               renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2 }]}
-                  onPress={() => handleAddToCart(item)}
-                >
-                  {item.photo && (
-                    <Image
-                      source={{ uri: `${POS_URL}${item.photo}` }}
-                      style={styles.menuImage}
-                      resizeMode="cover"
-                    />
-                  )}
-                  <View style={styles.menuInfo}>
-                    <Text style={styles.menuText} numberOfLines={2}>{item.name}</Text>
-                    <Text style={styles.menuPrice}>
-                      {item.extra ? `+${item.price}` : item.solo_price ? `${item.solo_price} DA` : `${item.price} DA`}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2 }]}
+            onPress={() => handleAddToCart(item)}
+          >
+            {item.photo && (
+              <Image
+                source={{ uri: `${POS_URL}${item.photo}` }}
+                style={styles.menuImage}
+                resizeMode="cover"
+              />
+            )}
+            <View style={styles.menuInfo}>
+              <Text style={styles.menuText} numberOfLines={2}>{item.name}</Text>
+              <Text style={styles.menuPrice}>
+                {item.extra ? `+${item.price}` : item.solo_price ? `${item.solo_price} DA` : `${item.price} DA`}
+              </Text>
+            </View>
+          </TouchableOpacity>
               )}
               contentContainerStyle={styles.menuGrid}
             />

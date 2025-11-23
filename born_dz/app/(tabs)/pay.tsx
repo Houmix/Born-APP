@@ -44,7 +44,7 @@ const card = async () => {
     }
         const accessToken = await AsyncStorage.getItem("token");
         const response = await axios.post(
-        `${POS_URL}/order/api/createOrder//`,
+        `${POS_URL}/order/api/createOrder/1/`,
         dataToSend,
         {
         headers: {
