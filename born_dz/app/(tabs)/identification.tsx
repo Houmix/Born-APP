@@ -49,7 +49,7 @@ export default function identificationScreen(){
                 AsyncStorage.setItem("token", accessToken)
                 AsyncStorage.setItem("User_id", response.data.id)
                 AsyncStorage.setItem("User_phone", response.data.phone)
-                navigation.navigate("menu")
+                navigation.navigate("terminal")
             } else {
                 setErrorMessage("Utilisateur introuvable")
             }
@@ -59,9 +59,9 @@ export default function identificationScreen(){
         }
     }
 
-    // Fonction ignore (Redirection vers la page des menu)
+    // Fonction ignore (Redirection vers la page terminal)
     const handleIgnore = async () => {
-        navigation.navigate("menu")
+        navigation.navigate("terminal")
     }
 
     return (
