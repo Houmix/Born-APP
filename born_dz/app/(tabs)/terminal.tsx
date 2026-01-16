@@ -8,47 +8,41 @@ import {
   Alert,
   Image,
   ScrollView,
-  ActivityIndicator, // Ajouté pour un meilleur indicateur de chargement
-  Modal, // Import du Modal
+  ActivityIndicator, 
+  Modal, 
 } from "react-native";
 import { useEffect, useState } from "react";
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { POS_URL, idRestaurant } from "@/config";
-import Feather from '@expo/vector-icons/Feather';
+import { POS_URL } from "@/config"; 
+import Feather from '@expo/vector-icons/Feather'; 
+import { Ionicons } from '@expo/vector-icons';
 import { useBorneSync } from "@/hooks/useBorneSync.js";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { LanguageSelector } from "@/components/LanguageSelector";
+
 export default function MenuScreen() {
   const router = useRouter();
-  //const [categories, setCategories] = useState([]);
+  const { t, isRTL } = useLanguage();
   const [selectedCategory, setSelectedCategory] = useState(null);
-  //const [menus, setMenus] = useState([]);
-  //const [isLoading, setIsLoading] = useState(true);
-  const [cartCount, setCartCount] = useState(0); // État pour le compteur du panier
-
-  // --- NOUVEAUX ÉTATS POUR LA MODALE ---
+  const [cartCount, setCartCount] = useState(0); 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedItemForModal, setSelectedItemForModal] = useState(null);
-  // ------------------------------------
+  const [isLanguageModalVisible, setIsLanguageModalVisible] = useState(false);
 
   const width = Dimensions.get("window").width;
-  // --- LOGIQUE RESPONSIVE (UTILISATION DE L'HÉRITAGE) ---
   const itemMargin = width > 700 ? 20 : 10;
   const numColumns =
     width >= 700  ? 3 :
     width >= 500  ? 2 :
     1;
-  const sidebarPercent = width > 700 ? 25 : 35; // 25% ou 35%
+  const sidebarPercent = width > 700 ? 25 : 35; 
   const sidebarWidth = `${sidebarPercent}%`;
   const menuGridWidth = 100 - sidebarPercent;
 
   const innerGridWidth = (width * menuGridWidth / 100);
   const itemWidth = (innerGridWidth - itemMargin * (numColumns + 1)) / numColumns;
-  // -------------------------
-  
 
-  // Fonction pour mettre à jour le compteur du panier
   const updateCartCount = async () => {
     try {
       const existingOrders = JSON.parse(await AsyncStorage.getItem("orderList") || "[]");
@@ -60,65 +54,13 @@ export default function MenuScreen() {
     }
   };
 
-
-  // --- USE EFFECT (INCHANGÉ) ---
-
   const { categories, menus, isLoading } = useBorneSync();
-  // useEffect(() => {
-  //   updateCartCount();
-
-  //   const GetCategorie = async () => {
-  //     try {
-  //       setIsLoading(true);
-  //       const accessToken = await AsyncStorage.getItem("token");
-  //       const response = await axios.get(`${POS_URL}/menu/api/getGroupMenuList/${idRestaurant}/`, {
-  //         headers: {
-  //           Authorization: `Bearer ${accessToken}`,
-  //         },
-  //       });
-
-  //       const availableCategories = response.data.filter((category) => category.avalaible);
-  //       setCategories(availableCategories);
-
-  //       if (availableCategories.length > 0) {
-  //         setSelectedCategory(availableCategories[0]);
-  //       }
-
-  //       await AsyncStorage.setItem("GroupMenu", JSON.stringify(availableCategories));
-  //     } catch (error) {
-  //       console.error("Erreur lors de la récupération des catégories", error);
-  //       Alert.alert("Erreur", "Impossible de charger les catégories.");
-  //     } 
-  //   };
-  //   GetCategorie();
-  // }, []);
-
   
-
-  // useEffect(() => {
-  //   const GetMenu = async () => {
-  //     try {
-  //       const accessToken = await AsyncStorage.getItem("token");
-  //       const response = await axios.get(`${POS_URL}/menu/api/getAllMenu/${idRestaurant}/`, {
-  //         headers: {
-  //           Authorization: `Bearer ${accessToken}`,
-  //         },
-  //       });
-  //       setMenus(response.data);
-  //       await AsyncStorage.setItem("Menu", JSON.stringify(response.data));
-  //     } catch (error) {
-  //       console.error("Erreur lors de la récupération des menus", error);
-  //       Alert.alert("Erreur", "Impossible de charger les menus.");
-  //     } finally {
-  //       setIsLoading(false); 
-  //     }
-  //   };
-  //   GetMenu();
-  // }, []);
-  // -----------------------------
-
-
-  // --- LOGIQUE MODALE ---
+  useEffect(() => {
+    if (categories.length > 0 && !selectedCategory) {
+      setSelectedCategory(categories[0]);
+    }
+  }, [categories]);
 
   const handleOpenModal = (item) => {
     setSelectedItemForModal(item);
@@ -146,16 +88,16 @@ export default function MenuScreen() {
 
       await AsyncStorage.setItem("orderList", JSON.stringify(updatedOrders));
       await updateCartCount();
-      setIsModalVisible(false); // Ferme la modale
+      setIsModalVisible(false);
 
       Alert.alert(
-        "✅ Ajouté !",
-        `${item.name} a été ajouté en tant que commande solo.`,
+        t('terminal.added_success'),
+        `${item.name} ${t('terminal.added_solo')}`,
         [{ text: "OK" }]
       );
     } catch (error) {
       console.error("Erreur lors de l'ajout solo :", error);
-      Alert.alert("Erreur", "Impossible d'ajouter le produit en mode solo.");
+      Alert.alert(t('error'), t('terminal.error_add'));
     }
   };
   
@@ -163,7 +105,7 @@ export default function MenuScreen() {
     if (!selectedItemForModal) return;
 
     const item = selectedItemForModal;
-    setIsModalVisible(false); // Ferme la modale
+    setIsModalVisible(false);
     
     router.push({
         pathname: "/step",
@@ -175,12 +117,8 @@ export default function MenuScreen() {
     });
   };
 
-  // --- LOGIQUE AJOUT AU PANIER ---
-
   const handleAddToCart = async (item) => {
-    
     if (item.extra) {
-      // Si le menu est un extra, ajouter directement au panier
       try {
         const existingOrders = JSON.parse(await AsyncStorage.getItem("orderList") || "[]");
 
@@ -190,24 +128,22 @@ export default function MenuScreen() {
         ];
         
         await AsyncStorage.setItem("orderList", JSON.stringify(updatedOrders));
-        await updateCartCount(); // Mise à jour du compteur
+        await updateCartCount();
 
         Alert.alert(
-          "✅ Ajouté !",
-          `${item.name} a été ajouté en tant qu'extra.`,
+          t('terminal.added_success'),
+          `${item.name} ${t('terminal.added_extra')}`,
           [{ text: "OK" }]
         );
       } catch (error) {
         console.error("Erreur lors de l'ajout au panier :", error);
-        Alert.alert("Erreur", "Impossible d'ajouter l'extra au panier.");
+        Alert.alert(t('error'), t('errors.add_cart'));
       }
     } else {
-      // Ouvre la modale pour choisir Solo/Menu
       handleOpenModal(item);
     }
   };
 
-  // --- COMPOSANT MODAL ---
   const ChoiceModal = () => {
     if (!selectedItemForModal) return null;
 
@@ -221,37 +157,34 @@ export default function MenuScreen() {
         <TouchableOpacity 
             style={modalStyles.centeredView}
             activeOpacity={1}
-            onPress={() => setIsModalVisible(false)} // Fermer en cliquant à l'extérieur
+            onPress={() => setIsModalVisible(false)}
         >
-          {/* Empêche la fermeture quand on clique sur la fenêtre elle-même */}
           <TouchableOpacity activeOpacity={1} style={modalStyles.modalView}>
             <Text style={modalStyles.modalTitle}>
               {selectedItemForModal.name}
             </Text>
             <Text style={modalStyles.modalSubtitle}>
-              Comment souhaitez-vous commander cet article ?
+              {t('terminal.choose_order_type')}
             </Text>
 
             <View style={modalStyles.buttonContainer}>
-              {/* BOUTON SOLO */}
               <TouchableOpacity
                 style={[modalStyles.button, modalStyles.buttonSolo]}
                 onPress={handleSoloAdd}
               >
-                <Text style={modalStyles.textStyle}>Solo</Text>
+                <Text style={modalStyles.textStyle}>{t('terminal.solo')}</Text>
                 <Text style={modalStyles.textStyleSmall}>
-                    ({selectedItemForModal.solo_price || selectedItemForModal.price || 0} DA)
+                    ({selectedItemForModal.solo_price || selectedItemForModal.price || 0} {t('terminal.solo_price')})
                 </Text>
               </TouchableOpacity>
 
-              {/* BOUTON EN MENU */}
               <TouchableOpacity
                 style={[modalStyles.button, modalStyles.buttonMenu]}
                 onPress={handleMenuAdd}
               >
-                <Text style={modalStyles.textStyle}>En Menu</Text>
+                <Text style={modalStyles.textStyle}>{t('terminal.in_menu')}</Text>
                 <Text style={modalStyles.textStyleSmall}>
-                    (Ajouter étapes et compléments)
+                    ({t('terminal.in_menu_subtitle')})
                 </Text>
               </TouchableOpacity>
             </View>
@@ -259,25 +192,23 @@ export default function MenuScreen() {
                 style={modalStyles.closeButton} 
                 onPress={() => setIsModalVisible(false)}
             >
-                <Text style={modalStyles.closeButtonText}>Annuler</Text>
+                <Text style={modalStyles.closeButtonText}>{t('cancel')}</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
     );
   };
-  // -------------------------
 
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#ff9900" />
-        <Text style={styles.loadingText}>Chargement des menus...</Text>
+        <ActivityIndicator size="large" color="#ff9900" /> 
+        <Text style={styles.loadingText}>{t('terminal.loading_menus')}</Text>
       </View>
     );
   }
   
-  // Filtrage des menus
   const filteredMenus = menus.filter(
     (item) =>
       item.group_menu === selectedCategory?.id &&
@@ -286,89 +217,100 @@ export default function MenuScreen() {
   );
 
   return (
-    <View style={styles.container}>
-      {/* Barre du haut */}
+    <View style={[styles.container, isRTL && { direction: 'rtl' }]}>
+      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>NomResto</Text>
-        <TouchableOpacity style={styles.cartButton} onPress={() => router.push("/cart")}>
-          <Feather name="shopping-cart" size={45} color="black" />
-          {cartCount > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{cartCount}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+  <Image 
+    source={require('@/assets/logo.png')} 
+    style={styles.logoImage} 
+    resizeMode="contain"
+  />
+  
+  <View style={styles.headerRight}>
+    {/* Sélecteur de langue DIRECTEMENT dans le header (UX Simplifiée) */}
+    <LanguageSelector />
 
+    {/* Bouton panier */}
+    <TouchableOpacity 
+      style={styles.cartButton} 
+      onPress={() => router.push("/cart")}
+    >
+      <Feather name="shopping-cart" size={45} color="black" />
+      {cartCount > 0 && (
+        <View style={styles.cartBadge}>
+          <Text style={styles.cartBadgeText}>{cartCount}</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  </View>
+</View>
       {/* Contenu principal */}
       <View style={styles.content}>
-        {/* Menu latéral (catégories) */}
-        <ScrollView style={[styles.sidebar, { width: sidebarWidth }]} contentContainerStyle={styles.sidebarContent}>
+        {/* Sidebar catégories */}
+        <ScrollView 
+          style={[styles.sidebar, { width: sidebarWidth }]} 
+          contentContainerStyle={styles.sidebarContent}
+        >
           {categories
             .filter((category) => category.avalaible)
-            .sort((a, b) => a.position - b.position) // Trie les catégories par le champ "position"
-            .map((category, index) => (
+            .map((category) => (
               <TouchableOpacity
-          key={category.id}
-          style={[
-            styles.categoryButton,
-            selectedCategory?.id === category.id && styles.selectedCategory,
-          ]}
-          onPress={() => setSelectedCategory(category)}
+                key={category.id}
+                style={[
+                  styles.categoryButton,
+                  selectedCategory?.id === category.id && styles.selectedCategory,
+                ]}
+                onPress={() => setSelectedCategory(category)}
               >
-          {/* Affiche l'image uniquement si elle est disponible ET si vous le souhaitez */}
-          {category.photo && (
-            <Image
-              source={{ uri: `${POS_URL}${category.photo}` }}
-              style={styles.categoryImage}
-            />
-          )}
-          <Text 
-            style={[
-              styles.categoryText,
-              selectedCategory?.id === category.id && styles.selectedCategoryText 
-            ]}
-          >
-            {category.name}
-          </Text>
+                {category.photo && (
+                  <Image
+                    source={{ uri: `${POS_URL}${category.photo}` }}
+                    style={styles.categoryImage}
+                  />
+                )}
+                <Text 
+                  style={[
+                    styles.categoryText,
+                    selectedCategory?.id === category.id && styles.selectedCategoryText 
+                  ]}
+                >
+                  {category.name}
+                </Text>
               </TouchableOpacity>
             ))}
         </ScrollView>
-
-        {/* Sélectionne automatiquement la première catégorie après le tri */}
-        {selectedCategory === null && categories.length > 0 && setSelectedCategory(categories.sort((a, b) => a.position - b.position)[0])}
 
         {/* Grille des menus */}
         <View style={[styles.menuGridContainer, { width: `${menuGridWidth}%` }]}>
           {filteredMenus.length === 0 ? (
             <View style={styles.emptyGrid}>
-              <Text style={styles.emptyGridText}>Aucun produit disponible dans cette catégorie.</Text>
+              <Text style={styles.emptyGridText}>{t('terminal.no_products')}</Text>
             </View>
           ) : (
             <FlatList
-              data={filteredMenus.sort((a, b) => a.position - b.position)} // Trie les menus par le champ "position"
+              data={filteredMenus}
               numColumns={numColumns}
-              key={numColumns} // Force le re-rendu si le nombre de colonnes change
+              key={numColumns} 
               keyExtractor={(item) => item.id.toString()}
               renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2 }]}
-            onPress={() => handleAddToCart(item)}
-          >
-            {item.photo && (
-              <Image
-                source={{ uri: `${POS_URL}${item.photo}` }}
-                style={styles.menuImage}
-                resizeMode="cover"
-              />
-            )}
-            <View style={styles.menuInfo}>
-              <Text style={styles.menuText} numberOfLines={2}>{item.name}</Text>
-              <Text style={styles.menuPrice}>
-                {item.extra ? `+${item.price}` : item.solo_price ? `${item.solo_price} DA` : `${item.price} DA`}
-              </Text>
-            </View>
-          </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2 }]}
+                  onPress={() => handleAddToCart(item)}
+                >
+                  {item.photo && (
+                    <Image
+                      source={{ uri: `${POS_URL}${item.photo}` }}
+                      style={styles.menuImage}
+                      resizeMode="cover"
+                    />
+                  )}
+                  <View style={styles.menuInfo}>
+                    <Text style={styles.menuText} numberOfLines={2}>{item.name}</Text>
+                    <Text style={styles.menuPrice}>
+                      {item.extra == 1 ? `+${item.price}` : item.solo_price == 1 ? `${item.solo_price} ${item.price} DA` : `${item.price} DA`}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
               )}
               contentContainerStyle={styles.menuGrid}
             />
@@ -376,14 +318,18 @@ export default function MenuScreen() {
         </View>
       </View>
       
-      {/* APPEL DE LA MODALE */}
+      {/* Modales */}
       <ChoiceModal />
-
+      
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  logoImage: {
+    width: 150,
+    height: 50,
+  },
   container: {
     flex: 1,
     backgroundColor: "white", 
@@ -401,9 +347,8 @@ const styles = StyleSheet.create({
     color: "#333",
     fontWeight: 'bold',
   },
-  // --- Header ---
   header: {
-    height: 100, // Hauteur fixe pour le Header
+    height: 100,
     backgroundColor: "#ffc300", 
     flexDirection: "row",
     justifyContent: "space-between",
@@ -412,10 +357,16 @@ const styles = StyleSheet.create({
     elevation: 8,
     shadowColor: "#000",
   },
-  title: {
-    color: "#333",
-    fontSize: 45,
-    fontWeight: "900",
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 15,
+  },
+  languageButton: {
+    padding: 15,
+    borderRadius: 10,
+    backgroundColor: 'white',
+    elevation: 5,
   },
   cartButton: {
     padding: 15,
@@ -441,13 +392,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  // --- Contenu et Sidebar ---
   content: {
     flex: 1,
     flexDirection: "row",
   },
   sidebar: {
-    // width est géré en ligne (width: sidebarWidth)
     backgroundColor: "#333", 
     elevation: 5,
   },
@@ -457,44 +406,39 @@ const styles = StyleSheet.create({
   },
   categoryButton: {
     borderRadius: 10,
-    padding: 15, // Plus de padding vertical
+    padding: 15,
     width: "90%",
     marginBottom: 15,
     alignItems: "center",
     backgroundColor: "#555",
     elevation: 3,
-    // Hauteur minimale pour les boutons sans image
     minHeight: 80, 
     justifyContent: 'center',
   },
   selectedCategory: {
-    backgroundColor: "#ff9900", // Orange vif pour la sélection
+    backgroundColor: "#ff9900",
     borderWidth: 4,
     borderColor: "#fff", 
-    // Correction de l'inversion de couleur de texte pour le bouton sélectionné
   },
   selectedCategoryText: {
-    color: "#333", // Texte noir pour le bouton sélectionné (fond orange)
+    color: "#333",
   },
   categoryImage: {
     width: "100%",
-    height: 100, // Réduit la hauteur des images pour laisser plus de place au texte si nécessaire
+    height: 100,
     marginBottom: 10,
     borderRadius: 8,
   },
   categoryText: {
-    color: "#fff", // Texte blanc par défaut (fond gris foncé)
-    fontSize: 28, // Grande taille
+    color: "#fff",
+    fontSize: 28,
     fontWeight: "bold",
     textAlign: "center",
   },
-  // --- Grille des Menus ---
   menuGridContainer: {
-    // width est géré en ligne (width: `${menuGridWidth}%`)
     padding: 10, 
   },
   menuGrid: {
-    // Assure que les items commencent en haut à gauche
     justifyContent: "flex-start",
     alignItems: "flex-start",
   },
@@ -509,11 +453,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 5,
     elevation: 5,
-    marginBottom: 20, // Ajout de marge en bas pour espacer les lignes
+    marginBottom: 20,
   },
   menuImage: {
     width: "100%",
-    height: "60%", // Laisse 40% pour l'info pour être sûr de ne pas tronquer
+    height: "60%",
     borderTopLeftRadius: 15,
     borderTopRightRadius: 15,
   },
@@ -524,7 +468,7 @@ const styles = StyleSheet.create({
     height: "40%",
   },
   menuText: {
-    fontSize: 22, // Légèrement réduit pour éviter le débordement
+    fontSize: 22,
     fontWeight: "bold",
     textAlign: "center",
     color: "#333",
@@ -548,13 +492,12 @@ const styles = StyleSheet.create({
   },
 });
 
-// --- STYLES MODALE ---
 const modalStyles = StyleSheet.create({
   centeredView: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: 'rgba(0, 0, 0, 0.7)', // Fond semi-transparent
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
   },
   modalView: {
     margin: 20,
@@ -563,16 +506,13 @@ const modalStyles = StyleSheet.create({
     padding: 35,
     alignItems: "center",
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 4,
     elevation: 5,
-    width: '70%', // Largeur adaptée à une borne
+    width: '70%',
     maxWidth: 600,
-    position: 'relative', // Pour placer le bouton Annuler
+    position: 'relative',
   },
   modalTitle: {
     fontSize: 40,
@@ -603,10 +543,10 @@ const modalStyles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonSolo: {
-    backgroundColor: "#007bff", // Bleu plus neutre pour Solo
+    backgroundColor: "#007bff",
   },
   buttonMenu: {
-    backgroundColor: "#ff9900", // Orange vif pour Menu
+    backgroundColor: "#ff9900",
   },
   textStyle: {
     color: "white",
