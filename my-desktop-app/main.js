@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
-const { spawn, execSync } = require('child_process'); // ⭐ AJOUT execSync ICI
+const { spawn, execSync } = require('child_process');
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -16,6 +16,7 @@ let djangoProcess;
 let staticServer;
 let mainWindow;
 let splashWindow; 
+let serialPort = null; // Port série pour l'imprimante
 
 const isDev = !app.isPackaged;
 
@@ -24,57 +25,195 @@ function log(message, type = 'info') {
   console.log(`${emoji} ${message}`);
 }
 
-const POS_PRINTER_NAME = "POS-80"; // ⬅️ AJUSTEZ CE NOM EXACTEMENT
 // ==========================================
-// 🖨️ HANDLER D'IMPRESSION (TEXTE BRUT RAW)
+// 🖨️ CONFIGURATION IMPRIMANTE SÉRIE
+// ==========================================
+const PRINTER_PORT = "COM4";        // ⬅️ Port série Windows
+const PRINTER_BAUDRATE = 115200;    // ⬅️ Vitesse de communication
+
+// Importer SerialPort (installation requise: npm install serialport)
+let SerialPort;
+try {
+  SerialPort = require('serialport').SerialPort;
+  log(`Module SerialPort chargé`, 'success');
+} catch (err) {
+  log(`⚠️ Module SerialPort non trouvé. Installez-le avec: npm install serialport`, 'warning');
+}
+
+// ==========================================
+// 🖨️ HANDLER D'IMPRESSION VIA PORT SÉRIE
 // ==========================================
 ipcMain.handle("print-ticket", async (event, ticketText) => {
-    // Utiliser un nom de fichier unique pour éviter les erreurs d'accès concurrents
-    const tempFilePath = path.join(os.tmpdir(), `ticket-${Date.now()}.txt`);
+    if (!SerialPort) {
+        return {
+            success: false,
+            error: "Module serialport non installé. Exécutez: npm install serialport"
+        };
+    }
 
     try {
-        log(`[Impression] Tentative RAW sur "${POS_PRINTER_NAME}"`, 'info');
+        log(`[Impression] Tentative sur port série ${PRINTER_PORT}`, 'info');
 
-        // 1️⃣ Écriture du fichier en encodage 'latin1' (ou 'cp437')
-        // Cela garantit que les caractères spéciaux de l'imprimante (lignes, euros) passent bien
-        fs.writeFileSync(tempFilePath, ticketText, { encoding: 'latin1' });
+        // Créer une nouvelle connexion série
+        const printer = new SerialPort({
+            path: PRINTER_PORT,
+            baudRate: PRINTER_BAUDRATE,
+            dataBits: 8,
+            parity: 'none',
+            stopBits: 1,
+            autoOpen: false
+        });
 
-        // 2️⃣ Commande d'envoi direct (Mode RAW)
-        // Note: Pour que '\\127.0.0.1\POS-80' fonctionne, l'imprimante DOIT être partagée dans Windows.
-        const printerPath = `\\\\127.0.0.1\\${POS_PRINTER_NAME}`;
-        
-        // On utilise la commande 'type' vers le chemin réseau local du spooler
-        const commandRaw = `cmd /c "type ${tempFilePath} > ${printerPath}"`;
+        // Ouvrir la connexion
+        await new Promise((resolve, reject) => {
+            printer.open((err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
 
-        log('[Impression] Envoi direct au spooler (0 marges)...', 'info');
-        
-        // Exécution de la commande
-        execSync(commandRaw, { windowsHide: true });
+        log(`[Impression] Port ${PRINTER_PORT} ouvert`, 'success');
 
-        log('[Impression] ✅ Ticket envoyé avec succès lalalala', 'success');
+        // Envoyer le texte à l'imprimante
+        await new Promise((resolve, reject) => {
+            printer.write(ticketText, 'utf8', (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
 
-        // 3️⃣ Nettoyage asynchrone pour ne pas ralentir le retour UI
-        setTimeout(() => {
-            if (fs.existsSync(tempFilePath)) {
-                try { fs.unlinkSync(tempFilePath); } catch (e) {}
-            }
-        }, 1000);
+        log(`[Impression] Données envoyées (${ticketText.length} octets)`, 'info');
 
-        return { success: true };
+        // Envoyer des sauts de ligne et la commande de coupe
+        await new Promise((resolve, reject) => {
+            printer.write('\n\n\n', 'utf8', (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
+
+        // Commande ESC/POS pour couper le papier
+        const cutCommand = Buffer.from([0x1D, 0x56, 0x00]);
+        await new Promise((resolve, reject) => {
+            printer.write(cutCommand, (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
+
+        log(`[Impression] Commande de coupe envoyée`, 'info');
+
+        // Fermer la connexion
+        await new Promise((resolve) => {
+            printer.close(() => resolve());
+        });
+
+        log(`[Impression] ✅ Impression réussie`, 'success');
+
+        return { 
+            success: true, 
+            port: PRINTER_PORT,
+            baudrate: PRINTER_BAUDRATE
+        };
 
     } catch (error) {
         log(`[Impression] ❌ Erreur: ${error.message}`, 'error');
         
-        // Tentative de secours automatique si le partage réseau n'est pas actif
-        try {
-            log('[Impression] ⚠️ Repli sur PowerShell (Out-Printer)...', 'warning');
-            const commandAlt = `powershell -Command "Get-Content '${tempFilePath}' | Out-Printer -Name '${POS_PRINTER_NAME}'"`;
-            execSync(commandAlt, { windowsHide: true });
-            return { success: true, warning: "Repli PowerShell utilisé" };
-        } catch (altError) {
-            log(`[Impression] ❌ Échec total: ${altError.message}`, 'error');
-            return { success: false, error: altError.message };
-        }
+        return { 
+            success: false, 
+            error: error.message,
+            port: PRINTER_PORT,
+            help: `Vérifiez que l'imprimante est connectée sur ${PRINTER_PORT} et allumée`
+        };
+    }
+});
+
+// ==========================================
+// 🖨️ HANDLER: Lister les ports série disponibles
+// ==========================================
+ipcMain.handle("get-available-ports", async () => {
+    if (!SerialPort) {
+        return {
+            success: false,
+            error: "Module serialport non installé"
+        };
+    }
+
+    try {
+        const { SerialPort } = require('serialport');
+        const ports = await SerialPort.list();
+        
+        log(`[Ports] ${ports.length} port(s) série trouvé(s)`, 'success');
+        
+        const portsList = ports.map(port => ({
+            path: port.path,
+            manufacturer: port.manufacturer || 'Inconnu',
+            serialNumber: port.serialNumber || 'N/A',
+            vendorId: port.vendorId || 'N/A',
+            productId: port.productId || 'N/A'
+        }));
+
+        return { 
+            success: true, 
+            ports: portsList,
+            currentPort: PRINTER_PORT
+        };
+    } catch (error) {
+        log(`[Ports] Erreur: ${error.message}`, 'error');
+        return { 
+            success: false, 
+            error: error.message 
+        };
+    }
+});
+
+// ==========================================
+// 🖨️ HANDLER: Tester la connexion au port série
+// ==========================================
+ipcMain.handle("test-printer-connection", async () => {
+    if (!SerialPort) {
+        return {
+            success: false,
+            error: "Module serialport non installé"
+        };
+    }
+
+    try {
+        log(`[Test] Vérification de ${PRINTER_PORT}...`, 'info');
+
+        const printer = new SerialPort({
+            path: PRINTER_PORT,
+            baudRate: PRINTER_BAUDRATE,
+            autoOpen: false
+        });
+
+        await new Promise((resolve, reject) => {
+            printer.open((err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
+
+        log(`[Test] ✅ Connexion réussie à ${PRINTER_PORT}`, 'success');
+
+        await new Promise((resolve) => {
+            printer.close(() => resolve());
+        });
+
+        return {
+            success: true,
+            port: PRINTER_PORT,
+            baudrate: PRINTER_BAUDRATE,
+            message: "Connexion réussie"
+        };
+
+    } catch (error) {
+        log(`[Test] ❌ Échec: ${error.message}`, 'error');
+        return {
+            success: false,
+            port: PRINTER_PORT,
+            error: error.message
+        };
     }
 });
 
@@ -154,6 +293,7 @@ const djangoExecInfo = getDjangoExecutable();
 log(`Mode: ${isDev ? 'DEV' : 'PROD'}`, 'info');
 log(`Backend: ${backendPath}`, 'info');
 log(`Frontend: ${frontendPath}`, 'info');
+log(`Imprimante: Port série ${PRINTER_PORT} @ ${PRINTER_BAUDRATE} bauds`, 'info');
 
 function checkRequirements() {
   if (!djangoExecInfo) return false;
@@ -176,7 +316,8 @@ function startDjango(callback) {
 
   log('Vérification et nettoyage du port 8000...', 'info');
 
-  // Définition de la logique de démarrage
+  const { exec } = require('child_process');
+
   const proceedWithStart = () => {
     log('Démarrage Django (ASGI/Daphne)...', 'info');
 
@@ -220,7 +361,6 @@ function startDjango(callback) {
       }
     });
 
-    // Utiliser /admin/ pour le check de santé
     waitForServer('http://127.0.0.1:8000/admin/', 30, 2000, () => {
       log('Django (ASGI) prêt', 'success');
       log(`URL du serveur pour les clients distants : http://${localIp}:8000`, 'info');
@@ -228,16 +368,11 @@ function startDjango(callback) {
     });
   };
 
-  // 🛡️ Nettoyage préventif AVANT de lancer proceedWithStart
   if (process.platform === 'win32') {
-    // On force l'arrêt de tout processus daphne.exe existant
-    // /f = force, /im = image name, /t = arbre de processus (enfants)
     exec('taskkill /f /im daphne.exe /t', () => {
-      // On attend 500ms que Windows libère réellement le port réseau
       setTimeout(proceedWithStart, 500);
     });
   } else {
-    // Sur macOS/Linux, le signal SIGTERM suffit généralement
     proceedWithStart();
   }
 }
@@ -356,19 +491,23 @@ function createMainWindow() {
     }
     mainWindow.show();
     
-    // 🖨️ Lister les imprimantes disponibles
-    try {
-      const printers = await mainWindow.webContents.getPrintersAsync();
-      console.log('\n🖨️ === IMPRIMANTES DISPONIBLES ===');
-      printers.forEach((p, i) => {
-        console.log(`[${i+1}] "${p.name}" ${p.isDefault ? '⭐ (Par défaut)' : ''}`);
-        if (p.name === POS_PRINTER_NAME) {
-          console.log('    ✅ IMPRIMANTE POS TROUVÉE !');
-        }
-      });
-      console.log('===================================\n');
-    } catch (err) {
-      console.error('❌ Erreur récupération imprimantes:', err);
+    // 🖨️ Vérifier les ports série disponibles
+    if (SerialPort) {
+      try {
+        const { SerialPort: SP } = require('serialport');
+        const ports = await SP.list();
+        console.log('\n🔌 === PORTS SÉRIE DISPONIBLES ===');
+        ports.forEach((port, i) => {
+          console.log(`[${i+1}] ${port.path}`);
+          console.log(`    └─ ${port.manufacturer || 'Inconnu'}`);
+          if (port.path === PRINTER_PORT) {
+            console.log('    ✅ PORT IMPRIMANTE TROUVÉ !');
+          }
+        });
+        console.log('===================================\n');
+      } catch (err) {
+        console.error('❌ Erreur récupération ports:', err);
+      }
     }
     
     log('Application prête', 'success');
@@ -404,15 +543,21 @@ function createSplashWindow(callback) {
     callback();
   });
 }
+
 const { exec } = require('child_process');
+
 function cleanup() {
   log('Arrêt des processus et libération des ports...', 'info');
 
-  // 1️⃣ Tuer Django/Daphne proprement ou par la force
+  // Fermer le port série si ouvert
+  if (serialPort && serialPort.isOpen) {
+    serialPort.close(() => {
+      log('✅ Port série fermé', 'success');
+    });
+  }
+
   if (djangoProcess) {
     if (process.platform === 'win32') {
-      // Sous Windows, on utilise taskkill avec /F (force) et /T (tree/enfants)
-      // On utilise le PID du processus que nous avons spawn
       exec(`taskkill /pid ${djangoProcess.pid} /f /t`, (err) => {
         if (err) {
           log(`Note: Impossible de tuer le PID ${djangoProcess.pid} (déjà fermé ?)`, 'info');
@@ -421,12 +566,10 @@ function cleanup() {
         }
       });
     } else {
-      // Unix (macOS/Linux)
       djangoProcess.kill('SIGTERM');
     }
   }
 
-  // 2️⃣ Fermer le serveur Express
   if (staticServer) {
     staticServer.close(() => log('✅ Serveur statique arrêté', 'success'));
   }
