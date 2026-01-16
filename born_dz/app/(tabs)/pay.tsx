@@ -4,7 +4,7 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import { POS_URL } from "@/config";
+import { POS_URL, idRestaurant} from "@/config";
 import { useEffect, useState } from "react";
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -40,7 +40,7 @@ export default function PaymentScreen() {
         setIsProcessing(true);
         try {
             const Employee_id = await AsyncStorage.getItem("Employee_id");
-            const restaurantId = await AsyncStorage.getItem("Employee_restaurant_id");
+            const restaurantId = idRestaurant;
             
             const dataToSend = {
                 user: Employee_id,
