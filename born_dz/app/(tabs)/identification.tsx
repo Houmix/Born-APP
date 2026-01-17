@@ -58,9 +58,28 @@ export default function identificationScreen(){
             setErrorMessage("Erreur lors de la connexion")
         }
     }
+    
+  // Fonction pour récupérer le token
+  const getToken = async () => {
+    try {
+      const response = await axios.post(`${POS_URL}/user/api/user/token/0`) // Get car dans le back c'est du get + Num dans la requete car ce n'est pas une donnée semsible (dans urls, il y a un slug)
+      if (response.status == 200 || response.status == 201) {
+        console.log(response);
+        AsyncStorage.setItem("token",response.data.access);
+        console.log("token stored");
+        console.log(response.data.access);
+      } else {
+        console.log("bad");
+      }
+    } catch (error) {
+      console.log("Erreur dans getToken:", error);
+    }
+  };
 
+  
     // Fonction ignore (Redirection vers la page terminal)
     const handleIgnore = async () => {
+        getToken();
         navigation.navigate("terminal")
     }
 

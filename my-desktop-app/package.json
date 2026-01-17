@@ -6,6 +6,7 @@
     "start": "electron ."
   },
   "devDependencies": {
-    "electron": "^32.2.7"
+    "electron": "^32.2.7",
+    "serialport": "^12.0.0"
   }
 }
