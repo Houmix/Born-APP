@@ -1,172 +1,223 @@
 import { useEffect, useState } from "react";
-import { Text, View, StyleSheet, TextInput,TouchableOpacity } from "react-native";
+import { Text, View, StyleSheet, TextInput, TouchableOpacity } from "react-native";
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage'; //AsyncStorage.setItem(clé,valeur) et .getItem(clé) pour stocker ou récupérer des données dans la sessions
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from "expo-router";
-import { POS_URL } from "@/config";
-export default function identificationScreen(){
-    const navigation = useNavigation() //Pour la redirection (navigation.navigate("NomDeLaPage"))
-    const [errorMessage, setErrorMessage] = useState("") //Pour afficher un message d'erreur
-    const [phoneNumber, setPhoneNumber] = useState("") //Stock le num de tél
+import { POS_URL, idRestaurant } from "@/config";
 
-    //async pour executer la fonction de manière asyncrone cad lors du click ou de son appel
-    //await permet d'attendre que la ligne fini son execution avant de passer à la suivante (utile quand on fait appel à une fonction)
-    
+export default function identificationScreen() {
+    const navigation = useNavigation();
+    const [errorMessage, setErrorMessage] = useState("");
+    const [phoneNumber, setPhoneNumber] = useState("");
+
     useEffect(() => {
-        
-    
-    const clearAll = async () => {
-        try {
-          await AsyncStorage.clear();
-          console.log("Tous les éléments de la session ont été supprimés");
-        } catch (e) {
-          console.error("Erreur lors de la suppression complète :", e);
-        }
-      };
-      clearAll();
-    }, []);
-    const postCustomerToken = async () => { //Recupération du token du Customer 
-        try {
-            const response = await axios.post(`${POS_URL}/user/api/user/token/${phoneNumber}`) // Get car dans le back c'est du get + Num dans la requete car ce n'est pas une donnée semsible (dans urls, il y a un slug)
-            return response.data.access
-        } catch (error) {
-            setErrorMessage("Utiisateur introuvable")
-        }
-
-    }
-    // Fonction lors de la confirmation
-    const handleSubmit = async () => { //Récupération des données de l'utilisateur
-        try {
-            const accessToken = await postCustomerToken() //Récupération du token
-            console.log("POS URL:", POS_URL);
-            const response = await axios.get(`${POS_URL}/user/api/getUser/${phoneNumber}`, {
-                headers: {
-                    Authorization: `Bearer ${accessToken}` //Token inséré dans la requête
-                }
-            })
-            
-            if (response.status == 200){ //Enregistrement des données de l'utilisateur dans la session + Redirection
-                AsyncStorage.setItem("token", accessToken)
-                AsyncStorage.setItem("User_id", response.data.id)
-                AsyncStorage.setItem("User_phone", response.data.phone)
-                navigation.navigate("terminal")
-            } else {
-                setErrorMessage("Utilisateur introuvable")
+        // Nettoyer uniquement les données utilisateur, pas le token anonyme
+        const clearUserData = async () => {
+            try {
+                await AsyncStorage.removeItem("User_id");
+                await AsyncStorage.removeItem("User_phone");
+                console.log("✅ Données utilisateur précédentes supprimées");
+            } catch (e) {
+                console.error("❌ Erreur suppression:", e);
             }
-        } catch (error) {
-            console.error("Erreur lors de l'envoi du num", error)
-            setErrorMessage("Erreur lors de la connexion")
-        }
-    }
+        };
+        clearUserData();
+    }, []);
 
-    // Fonction ignore (Redirection vers la page terminal)
+    // ✅ FONCTION PRINCIPALE : Récupère ou crée l'utilisateur
+    const handleSubmit = async () => {
+        try {
+            setErrorMessage("");
+            
+            if (!phoneNumber || phoneNumber.length < 10) {
+                setErrorMessage("Numéro de téléphone invalide");
+                return;
+            }
+            
+            console.log(`📤 Connexion/Création utilisateur: ${phoneNumber}`);
+            
+            // ✅ ÉTAPE 1 : Récupérer ou créer le token
+            const tokenResponse = await axios.post(
+                `${POS_URL}/user/api/user/token/`,
+                { phone: phoneNumber }
+            );
+            
+            const accessToken = tokenResponse.data.access;
+            
+            if (tokenResponse.status === 201) {
+                console.log("✅ Nouvel utilisateur créé!");
+            } else {
+                console.log("✅ Utilisateur existant trouvé!");
+            }
+            
+            // ✅ ÉTAPE 2 : Récupérer les détails de l'utilisateur
+            const userResponse = await axios.post(
+                `${POS_URL}/user/api/getUser/`,
+                { phone: phoneNumber },
+                {
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`
+                    }
+                }
+            );
+            
+            const userData = userResponse.data;
+            console.log("✅ Données utilisateur:", userData);
+            
+            // ✅ ÉTAPE 3 : Sauvegarder dans AsyncStorage
+            await AsyncStorage.setItem("token", accessToken);
+            await AsyncStorage.setItem("User_id", userData.id.toString());
+            await AsyncStorage.setItem("User_phone", userData.phone);
+            await AsyncStorage.setItem("Employee_id", userData.id.toString());
+            await AsyncStorage.setItem("Employee_restaurant_id", idRestaurant.toString());
+            
+            console.log("✅ Session utilisateur créée:", {
+                user_id: userData.id,
+                phone: userData.phone,
+                restaurant: idRestaurant
+            });
+            
+            // ✅ ÉTAPE 4 : Redirection
+            navigation.navigate("terminal");
+            
+        } catch (error) {
+            console.error("❌ Erreur:", error.response?.data || error.message);
+            
+            if (error.response?.status === 404) {
+                setErrorMessage("Utilisateur introuvable");
+            } else if (error.response?.status === 500) {
+                setErrorMessage("Erreur serveur");
+            } else if (error.response?.status === 400) {
+                setErrorMessage("Numéro de téléphone invalide");
+            } else {
+                setErrorMessage("Erreur de connexion");
+            }
+        }
+    };
+
+    // ✅ MODE ANONYME
     const handleIgnore = async () => {
-        navigation.navigate("terminal")
-    }
+        try {
+            console.log("🔍 Mode anonyme activé");
+            
+            // Vérifier le token anonyme
+            let token = await AsyncStorage.getItem("token");
+            let restaurantId = await AsyncStorage.getItem("Employee_restaurant_id");
+            
+            // Si manquants, les récupérer
+            if (!token || !restaurantId) {
+                console.log("⚠️ Token manquant, récupération...");
+                
+                const response = await axios.post(
+                    `${POS_URL}/user/api/user/token/`,
+                    { phone: null }
+                );
+                
+                token = response.data.access;
+                
+                await AsyncStorage.setItem("token", token);
+                await AsyncStorage.setItem("Employee_restaurant_id", idRestaurant.toString());
+            }
+            
+            // Mode anonyme : Employee_id = 0
+            await AsyncStorage.setItem("Employee_id", "0");
+            
+            console.log("✅ Mode anonyme configuré:", {
+                token: "Présent",
+                restaurant: idRestaurant,
+                employee: 0
+            });
+            
+            navigation.navigate("terminal");
+            
+        } catch (error) {
+            console.error("❌ Erreur mode anonyme:", error);
+            setErrorMessage("Erreur lors de l'initialisation");
+        }
+    };
 
     return (
         <View style={styles.main}>
-         <View style={styles.textBox}>
-           
-           {errorMessage && <Text style={{ color: 'red', marginBottom: 10 }}>{errorMessage}</Text>}
+            <View style={styles.textBox}>
+                {errorMessage && (
+                    <Text style={styles.errorText}>{errorMessage}</Text>
+                )}
         
-           <TextInput
-            style={styles.input}
-            placeholder="Numéro de téléphone"
-            keyboardType="numeric"
-            value={phoneNumber}  // Lier la valeur du champ à l'état
-            onChangeText={setPhoneNumber}  // Mettre à jour l'état lors de la saisie
-            editable={false} // Rendre le champ non éditable directement
-            />
-            <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center" }}>
-            {[[1, 2, 3, 4, 5], [6, 7, 8, 9, 0]].map((row, rowIndex) => (
-                <View key={rowIndex} style={{ flexDirection: "row", justifyContent: "center" }}>
-                    {row.map((num) => (
-                        <TouchableOpacity
-                            key={num}
-                            style={[styles.button, { width: 60, height: 60, margin: 5 }]}
-                            onPress={() => setPhoneNumber((prev) => prev + num.toString())}
-                        >
-                            <Text style={styles.txtBtn}>{num}</Text>
-                        </TouchableOpacity>
+                <TextInput
+                    style={styles.input}
+                    placeholder="Numéro de téléphone"
+                    keyboardType="numeric"
+                    value={phoneNumber}
+                    onChangeText={setPhoneNumber}
+                    editable={false}
+                />
+                
+                {/* Clavier numérique */}
+                <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "center" }}>
+                    {[[1, 2, 3, 4, 5], [6, 7, 8, 9, 0]].map((row, rowIndex) => (
+                        <View key={rowIndex} style={{ flexDirection: "row", justifyContent: "center" }}>
+                            {row.map((num) => (
+                                <TouchableOpacity
+                                    key={num}
+                                    style={[styles.button, { width: 60, height: 60, margin: 5 }]}
+                                    onPress={() => setPhoneNumber((prev) => prev + num.toString())}
+                                >
+                                    <Text style={styles.txtBtn}>{num}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
                     ))}
+                    
+                    {/* Bouton effacer */}
+                    <TouchableOpacity
+                        style={[styles.button, { width: 60, height: 60, margin: 5 }]}
+                        onPress={() => setPhoneNumber((prev) => prev.slice(0, -1))}
+                    >
+                        <Text style={styles.txtBtn}>⌫</Text>
+                    </TouchableOpacity>
                 </View>
-            ))}
-            <TouchableOpacity
-                style={[styles.button, { width: 60, height: 60, margin: 5 }]}
-                onPress={() => setPhoneNumber((prev) => prev.slice(0, -1))} // Supprimer le dernier chiffre
-            >
-                <Text style={styles.txtBtn}>⌫</Text>
-            </TouchableOpacity>
+                
+                {/* Boutons actions */}
+                <TouchableOpacity 
+                    style={[styles.button, styles.confirmButton]} 
+                    onPress={handleSubmit}
+                >
+                    <Text style={styles.txtBtn}>Confirmer</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                    style={[styles.button, styles.ignoreButton]} 
+                    onPress={handleIgnore}
+                >
+                    <Text style={styles.txtBtn}>Ignorer (Mode Anonyme)</Text>
+                </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.button} onPress={handleSubmit}>
-            <Text style={styles.txtBtn}>Confirmer</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.button} onPress={handleIgnore}>
-            <Text style={styles.txtBtn}>Ignorer</Text>
-            </TouchableOpacity>
-         </View>
         </View>
-    )
-   
+    );
 }
+
 const styles = StyleSheet.create({
     main: {
-        flex:1,
-        flexDirection:'column',
-        display:"flex",
+        flex: 1,
+        flexDirection: 'column',
+        display: "flex",
         justifyContent: "center",
         alignItems: "center",
         backgroundColor: "white",
-        
     },
     textBox: {
-        height:"20%",
-        flexDirection:"column",
-        display:"flex",
+        height: "20%",
+        flexDirection: "column",
+        display: "flex",
         justifyContent: "center",
         alignItems: 'center',
+        paddingHorizontal: 20,
     },
-    container: {
-        height:"70%",
-        flexDirection:"row",
-        display:"flex",
-        justifyContent: "center",
-        alignItems: "center",
-        gap: 20, // Espacement entre les boutons
-        backgroundColor: "white",
-    },
-    box: {
-        width: "100%",
-        height: "100%",
-        backgroundColor: "white",
-        borderRadius: 15,
-        display:"flex",
-        justifyContent: "center",
-        alignItems: "center",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.5,
-        shadowRadius: 5,
-        elevation: 5, // Ombre pour Android
-    },
-    title: {
-        color: "black",
-        fontSize: 30,
-        fontWeight: "bold",
-        textDecorationLine:"underline",
-    },
-    text: {
-        color: "black",
-        fontSize: 30,
-        fontWeight: "bold",
-        textDecorationLine: "none", // Supprime le soulignement du lien
-    },
-    txtBtn: {
-        color: "black",
-        fontSize: 15,
-        fontWeight: "bold",
-        textDecorationLine: "none", // Supprime le soulignement du lien
+    errorText: {
+        color: 'red',
+        marginBottom: 10,
+        fontSize: 18,
+        fontWeight: '600',
     },
     input: {
         width: "100%",
@@ -178,8 +229,9 @@ const styles = StyleSheet.create({
         fontSize: 20,
         backgroundColor: "#fff",
         marginBottom: 20,
+        textAlign: 'center',
     },
-      button: {
+    button: {
         backgroundColor: "white",
         margin: 10,
         paddingVertical: 12,
@@ -191,7 +243,19 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 5,
-        elevation: 5, // Ombre pour Android
-      },
-    
-})
+        elevation: 5,
+    },
+    confirmButton: {
+        backgroundColor: "#4CAF50",
+        marginTop: 20,
+    },
+    ignoreButton: {
+        backgroundColor: "#9E9E9E",
+    },
+    txtBtn: {
+        color: "black",
+        fontSize: 15,
+        fontWeight: "bold",
+        textDecorationLine: "none",
+    },
+});

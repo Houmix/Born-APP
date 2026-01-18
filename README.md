@@ -336,3 +336,6 @@ Privé - Born DZ
 ---
 
 **Développé avec ❤️ pour Born DZ**
+
+
+npx expo install expo-linear-gradient

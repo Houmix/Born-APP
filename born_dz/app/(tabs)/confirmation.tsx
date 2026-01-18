@@ -87,8 +87,10 @@ export default function ConfirmationPage() {
             setTimeout(() => {
                 console.log("🔄 Retour au terminal...");
                 AsyncStorage.removeItem("lastOrderId"); 
-                router.push("/terminal"); 
-            }, 4000);
+                AsyncStorage.removeItem("orderList"); // Vide les articles
+                AsyncStorage.removeItem("pendingOrder"); // Vide la commande en cours
+                router.push("/index"); 
+            }, 10000);
         }
     };
 
