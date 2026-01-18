@@ -3,13 +3,27 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { execSync } = require('child_process');
+const { SerialPort } = require('serialport');
 
+// ==========================================
+// ⚙️ CONFIGURATION GLOBALE (CHANGE ICI !)
+// ==========================================
+// 'S' = Samsung (Méthode CMD/Fichier)
+// 'C' = Cashino (Méthode SerialPort/Flux continu)
+const ACTIVE_PROFILE = 'S'; 
+
+const PRINTERS = {
+    S: { port: "COM4", baud: 115200, driver: 'Samsung' },
+    C: { port: "COM4", baud: 9600,   driver: 'Cashino' }
+};
+
+const CURRENT_CONFIG = PRINTERS[ACTIVE_PROFILE];
 let mainWindow;
+let cashinoPort = null; // Connexion persistante pour Cashino
 
-// Configuration de l'imprimante
-const PORT_COM = "COM5";      // ✅ Ton port validé
-const BAUD_RATE = 115200;     // ✅ Ta vitesse validée
-
+// ==========================================
+// 🖥️ FENÊTRE PRINCIPALE
+// ==========================================
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1080,
@@ -21,113 +35,160 @@ function createWindow() {
             nodeIntegration: false,
         },
     });
-
-    mainWindow.loadURL('http://localhost:8081'); 
+    mainWindow.loadURL('http://localhost:8081');
 }
 
 // ==========================================
-// 🖨️ HANDLER D'IMPRESSION SÉRIE (CORRIGÉ)
+// 🚀 ROUTEUR D'IMPRESSION
 // ==========================================
 ipcMain.handle("printTicket", async (event, ticketContent) => {
+    console.log(`\n🖨️ DEMANDE IMPRESSION - PROFIL: [${ACTIVE_PROFILE}] ${CURRENT_CONFIG.driver}`);
+
+    if (ACTIVE_PROFILE === 'S') {
+        return await printSamsung(ticketContent);
+    } else if (ACTIVE_PROFILE === 'C') {
+        return await printCashino(ticketContent);
+    }
+});
+
+// ==========================================
+// 🛠️ DRIVER A : SAMSUNG (Méthode Shell/CMD)
+// ==========================================
+async function printSamsung(ticketContent) {
     const tempFilePath = path.join(os.tmpdir(), `ticket_${Date.now()}.txt`);
-    
+    const { port, baud } = CURRENT_CONFIG;
+
     try {
-        console.log(`[Impression] Début sur ${PORT_COM}...`);
-        
-        // Commandes ESC/POS : Sauts de ligne + Découpe
-        const ESC = '\x1B';
+        // 1. Préparation du contenu (UTF-8 pour Samsung)
         const GS = '\x1D';
-        const CUT_COMMAND = '\n\n\n\n' + GS + 'V' + '\x00';  // ✅ Commande de coupe standard
-        
+        const CUT_COMMAND = '\n\n\n\n' + GS + 'V' + '\x00';
         const fullContent = ticketContent + CUT_COMMAND;
         
-        // ✅ CORRECTION 1 : Écriture en UTF-8 (pas latin1 pour éviter les problèmes)
         fs.writeFileSync(tempFilePath, fullContent, { encoding: 'utf8' });
-        console.log(`[Impression] Fichier créé: ${tempFilePath}`);
-        
-        // ✅ CORRECTION 2 : Configuration du port COM (syntaxe corrigée)
+
+        // 2. Configuration du port via CMD
         try {
-            const modeCommand = `mode ${PORT_COM}: BAUD=${BAUD_RATE} PARITY=N DATA=8 STOP=1`;
-            console.log(`[Impression] Configuration port: ${modeCommand}`);
-            execSync(modeCommand, { windowsHide: true });
-            console.log(`[Impression] ✅ Port ${PORT_COM} configuré`);
-        } catch (modeError) {
-            // Si le port est déjà configuré, on continue
-            console.log(`[Impression] ⚠️ Port déjà configuré ou erreur mode: ${modeError.message}`);
-        }
-        
-        // ✅ CORRECTION 3 : Envoi vers COM (syntaxe corrigée avec guillemets)
-        const printCommand = `type "${tempFilePath}" > ${PORT_COM}`;
-        console.log(`[Impression] Commande: ${printCommand}`);
-        
-        execSync(printCommand, { 
-            windowsHide: true,
-            shell: 'cmd.exe',
-            timeout: 5000
+            execSync(`mode ${port}: BAUD=${baud} PARITY=N DATA=8 STOP=1`, { windowsHide: true });
+        } catch (e) { /* Ignorer si déjà configuré */ }
+
+        // 3. Envoi via CMD
+        execSync(`type "${tempFilePath}" > ${port}`, { 
+            windowsHide: true, 
+            shell: 'cmd.exe', 
+            timeout: 5000 
         });
-        
-        console.log(`[Impression] ✅ Données envoyées à ${PORT_COM}`);
-        
-        return { success: true, port: PORT_COM };
-        
+
+        console.log(`✅ [Samsung] Envoyé sur ${port}`);
+        return { success: true };
+
     } catch (error) {
-        console.error(`[Impression] ❌ Erreur: ${error.message}`);
-        console.error(`[Impression] ❌ Stack: ${error.stack}`);
-        
-        return { 
-            success: false, 
-            error: error.message,
-            details: `Échec d'impression sur ${PORT_COM}. Vérifiez que le port est disponible.`
-        };
-        
+        console.error(`❌ [Samsung] Erreur: ${error.message}`);
+        return { success: false, error: error.message };
     } finally {
-        // Nettoyage du fichier temporaire
-        try {
-            if (fs.existsSync(tempFilePath)) {
-                fs.unlinkSync(tempFilePath);
-                console.log(`[Impression] Fichier temporaire supprimé`);
-            }
-        } catch (cleanupError) {
-            console.error(`[Impression] ⚠️ Erreur nettoyage: ${cleanupError.message}`);
+        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
+    }
+}
+
+// ==========================================
+// 🛠️ DRIVER B : CASHINO (Méthode SerialPort Persistante)
+// ==========================================
+
+// 1. Gestion de la connexion (Appelée au démarrage)
+function connectCashino() {
+    if (cashinoPort && cashinoPort.isOpen) return;
+    const { port, baud } = CURRENT_CONFIG;
+
+    console.log(`🔌 [Cashino] Connexion persistante au ${port}...`);
+    cashinoPort = new SerialPort({
+        path: port,
+        baudRate: baud,
+        dataBits: 8,
+        parity: 'none',
+        stopBits: 1,
+        autoOpen: false,
+        rtscts: false
+    });
+
+    cashinoPort.open((err) => {
+        if (err) {
+            console.error(`❌ [Cashino] Échec connexion: ${err.message}`);
+            setTimeout(connectCashino, 5000); // Retry auto
+        } else {
+            console.log(`✅ [Cashino] Connecté sur ${port}`);
         }
+    });
+
+    cashinoPort.on('close', () => {
+        console.warn("⚠️ [Cashino] Déconnecté ! Tentative de reconnexion...");
+        cashinoPort = null;
+        setTimeout(connectCashino, 5000);
+    });
+    
+    cashinoPort.on('error', (err) => console.error(`❌ [Cashino] Erreur Port: ${err.message}`));
+}
+
+// 2. Logique d'envoi par paquets (Chunking)
+async function printCashino(ticketContent) {
+    if (!cashinoPort || !cashinoPort.isOpen) {
+        connectCashino();
+        return { success: false, error: "Imprimante déconnectée, réessayez dans 5s..." };
     }
-});
+
+    return new Promise((resolve) => {
+        // Préparation Buffer (Latin1 pour Cashino)
+        const ESC = 0x1B;
+        const GS = 0x1D;
+        const header = Buffer.from([ESC, 0x40, ESC, 0x61, 0x01, ESC, 0x45, 0x01]); 
+        
+        // Nettoyage texte
+        const cleanContent = ticketContent.replace(/\r\n/g, '\n').replace(/\n/g, '\n');
+        const content = Buffer.from(cleanContent + '\n\n', 'latin1'); 
+        const footer = Buffer.from([0x0A, 0x0A, 0x0A, 0x0A, GS, 0x56, 0x42, 0x00]);
+
+        const fullData = Buffer.concat([header, content, footer]);
+
+        // Envoi lent (16 bytes par 50ms)
+        const CHUNK_SIZE = 16; 
+        let currentOffset = 0;
+
+        function sendNextChunk() {
+            if (currentOffset >= fullData.length) {
+                cashinoPort.drain(() => {
+                    console.log("✅ [Cashino] Impression terminée (Buffer vidé)");
+                    resolve({ success: true });
+                });
+                return;
+            }
+
+            const end = Math.min(currentOffset + CHUNK_SIZE, fullData.length);
+            const chunk = fullData.slice(currentOffset, end);
+
+            cashinoPort.write(chunk, (err) => {
+                if (err) {
+                    console.error("❌ [Cashino] Erreur écriture:", err);
+                    resolve({ success: false, error: err.message });
+                    if (cashinoPort.isOpen) cashinoPort.close();
+                    return;
+                }
+                currentOffset += CHUNK_SIZE;
+                setTimeout(sendNextChunk, 50); // Pause moteur
+            });
+        }
+        sendNextChunk();
+    });
+}
 
 // ==========================================
-// 🔧 HANDLER: Tester le port COM
+// 🏁 INITIALISATION
 // ==========================================
-ipcMain.handle("testPort", async () => {
-    try {
-        console.log(`[Test] Vérification de ${PORT_COM}...`);
-        
-        // Tester la configuration du port
-        const modeCommand = `mode ${PORT_COM}:`;
-        const result = execSync(modeCommand, { 
-            encoding: 'utf8',
-            windowsHide: true 
-        });
-        
-        console.log(`[Test] ✅ Port ${PORT_COM} accessible`);
-        console.log(result);
-        
-        return { 
-            success: true, 
-            port: PORT_COM,
-            info: result
-        };
-        
-    } catch (error) {
-        console.error(`[Test] ❌ Port ${PORT_COM} inaccessible: ${error.message}`);
-        
-        return { 
-            success: false, 
-            error: error.message,
-            help: `Vérifiez que l'imprimante est branchée et que le pilote est installé.`
-        };
+app.whenReady().then(() => {
+    createWindow();
+    
+    // On lance la connexion persistante SEULEMENT si on est en mode Cashino
+    if (ACTIVE_PROFILE === 'C') {
+        connectCashino();
     }
 });
-
-app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
