@@ -1,12 +1,33 @@
 {
-  "name": "borne-electron-shell",
+  "name": "do-eat-borne",
   "version": "1.0.0",
+  "description": "Borne de commande Do-Eat (React + Electron)",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "build": "electron-builder"
+  },
+  "build": {
+    "appId": "com.doeat.borne",
+    "productName": "Do-Eat Borne",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json",
+      "web-build/**/*"
+    ],
+    "extraResources": []
   },
   "devDependencies": {
     "electron": "^32.2.7",
+    "electron-builder": "^24.13.3",
     "serialport": "^12.0.0"
   }
 }
