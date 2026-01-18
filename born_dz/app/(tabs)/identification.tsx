@@ -16,6 +16,9 @@ export default function identificationScreen() {
             try {
                 await AsyncStorage.removeItem("User_id");
                 await AsyncStorage.removeItem("User_phone");
+                await AsyncStorage.removeItem("lastOrderId"); 
+                await AsyncStorage.removeItem("orderList"); // Vide les articles
+                await AsyncStorage.removeItem("pendingOrder"); // Vide la commande en cours
                 console.log("✅ Données utilisateur précédentes supprimées");
             } catch (e) {
                 console.error("❌ Erreur suppression:", e);

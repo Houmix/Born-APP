@@ -24,7 +24,9 @@ export default function IndexScreen() {
         await AsyncStorage.setItem("token", response.data.access);
         await AsyncStorage.setItem("Employee_restaurant_id", idRestaurant.toString());
         await AsyncStorage.setItem("Employee_id", "0");  // Anonyme
-        
+        await AsyncStorage.removeItem("lastOrderId"); 
+                await AsyncStorage.removeItem("orderList"); // Vide les articles
+                await AsyncStorage.removeItem("pendingOrder"); // Vide la commande en cours
         console.log(`✅ Configuration:`, {
           token: response.data.access,
           restaurant: idRestaurant,
@@ -40,6 +42,7 @@ export default function IndexScreen() {
 
   // Exécuté au chargement de la page
   useEffect(() => {
+    
     getToken();
   }, []);
 
