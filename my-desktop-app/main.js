@@ -35,7 +35,21 @@ function createWindow() {
             nodeIntegration: false,
         },
     });
-    mainWindow.loadURL('http://localhost:8081');
+    // --- LA CORRECTION EST ICI ---
+  if (app.isPackaged) {
+    // EN PRODUCTION : On charge le fichier local généré par le build web
+    // Assure-toi que le chemin correspond à ton dossier de build (souvent 'web-build' ou 'dist')
+    const indexPath = path.join(__dirname, 'web-build', 'index.html');
+    
+    if (fs.existsSync(indexPath)) {
+      mainWindow.loadFile(indexPath);
+    } else {
+      console.error("Fichier index.html introuvable dans web-build !");
+    }
+  } else {
+    // EN DÉVELOPPEMENT : On utilise le serveur Expo/React
+    mainWindow.loadURL('http://localhost:8001');
+  }
 }
 
 // ==========================================
