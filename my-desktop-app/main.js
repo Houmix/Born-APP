@@ -26,9 +26,9 @@ let cashinoPort = null; // Connexion persistante pour Cashino
 // ==========================================
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 1080,
-        height: 1920,
-        fullscreen: true,
+        fullscreen:true,
+        kiosk:true,
+        frame: false,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
