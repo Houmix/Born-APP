@@ -30,11 +30,14 @@
       {
         "from": "../born_dz/dist",
         "to": "web-build",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ]
   },
   "dependencies": {
+    "escpos-serialport": "^3.0.0-alpha.4",
     "express": "^4.22.1",
     "serialport": "^12.0.0"
   },

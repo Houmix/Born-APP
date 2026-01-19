@@ -9,14 +9,14 @@ const express = require('express');
 // ==========================================
 // ⚙️ CONFIGURATION (S = Spooler / C = COM)
 // ==========================================
-const ACTIVE_PROFILE = 'S'; 
+const ACTIVE_PROFILE = 'C'; 
 const PRINTERS = {
     S: { port: "COM4", baud: 115200, driver: 'Samsung' },
     C: { port: "COM4", baud: 9600,   driver: 'Cashino' }
 };
 
 const CURRENT_CONFIG = PRINTERS[ACTIVE_PROFILE];
-const POS_PRINTER_NAME = "POS-80"; // Nom pour le profil 'S'
+const POS_PRINTER_NAME = "PrinterC"; // Nom pour le profil 'S'
 let mainWindow;
 let cashinoPort = null;
 

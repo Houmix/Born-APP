@@ -1,113 +1,72 @@
-// ==========================================
-// 🖨️ HANDLER D'IMPRESSION FINAL (TEXTE BRUT)
-// À intégrer dans votre main.js principal
-// ==========================================
+const escpos = require('escpos');
+// On charge l'adaptateur Série au lieu de USB
+escpos.Serial = require('escpos-serialport');
 
-const { ipcMain } = require('electron');
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
-
-const POS_PRINTER_NAME = "POS-80"; // ⚠️ Ajustez selon votre imprimante
-
-/**
- * Handler d'impression pour tickets POS
- * Utilise la commande Windows Out-Printer (texte brut)
- * Fonctionne comme imprimer un .txt avec Ctrl+P
- */
-ipcMain.handle("print-ticket", async (event, ticketText) => {
-    let tempFilePath = null;
-
+function printTicket(ticketContent, ticketFormat = 'TEXT') {
+  return new Promise((resolve, reject) => {
     try {
-        console.log(`[Impression] Début sur "${POS_PRINTER_NAME}"`);
+      console.log(`[PRINT] Tentative d'impression sur COM4...`);
 
-        // 1️⃣ Créer un fichier texte temporaire
-        tempFilePath = path.join(os.tmpdir(), `ticket-${Date.now()}.txt`);
-        fs.writeFileSync(tempFilePath, ticketText, 'utf-8');
-        console.log(`[Impression] Fichier créé: ${tempFilePath}`);
+      // 1. CONFIGURATION COM4
+      // baudRate: Souvent 9600 pour les vieilles imprimantes, ou 115200 pour les récentes.
+      // Si ça imprime des caractères bizarres, essaie de changer 9600 en 115200.
+      const device = new escpos.Serial('COM4', {
+        baudRate: 9600, 
+        autoOpen: false 
+      });
 
-        // 2️⃣ Envoyer à l'imprimante via PowerShell
-        const command = `powershell -Command "Get-Content '${tempFilePath}' | Out-Printer -Name '${POS_PRINTER_NAME}'"`;
-        
-        console.log(`[Impression] Envoi à l'imprimante...`);
-        execSync(command, { 
-            encoding: 'utf-8',
-            timeout: 5000,
-            windowsHide: true // Cache la fenêtre PowerShell
-        });
-        
-        console.log(`[Impression] ✅ Succès`);
+      const options = { encoding: "858" }; // Encodage Euro + Accents
+      const printer = new escpos.Printer(device, options);
 
-        // 3️⃣ Nettoyer le fichier temporaire après un délai
-        setTimeout(() => {
-            try {
-                if (tempFilePath && fs.existsSync(tempFilePath)) {
-                    fs.unlinkSync(tempFilePath);
-                    console.log(`[Impression] Fichier temporaire supprimé`);
-                }
-            } catch (cleanupError) {
-                // Ignore les erreurs de nettoyage
-            }
-        }, 2000);
-
-        return { 
-            success: true, 
-            printer: POS_PRINTER_NAME 
-        };
-
-    } catch (error) {
-        console.error(`[Impression] ❌ Erreur: ${error.message}`);
-        
-        // Essayer de nettoyer même en cas d'erreur
-        if (tempFilePath) {
-            try {
-                fs.unlinkSync(tempFilePath);
-            } catch (e) {
-                // Ignore
-            }
+      device.open(function(error) {
+        if (error) {
+          console.error("[PRINT] Erreur ouverture port:", error);
+          return reject(error);
         }
 
-        return { 
-            success: false, 
-            error: error.message 
-        };
-    }
-});
+        console.log("[PRINT] Port COM4 ouvert. Envoi des données...");
 
-/**
- * Handler optionnel : Lister les imprimantes disponibles
- */
-ipcMain.handle("get-available-printers", async () => {
-    try {
-        const command = `powershell -Command "Get-Printer | Select-Object Name, PrinterStatus | ConvertTo-Json"`;
-        const output = execSync(command, { encoding: 'utf-8', timeout: 3000 });
-        const printers = JSON.parse(output);
-        
-        // S'assurer que c'est toujours un tableau
-        const printerList = Array.isArray(printers) ? printers : [printers];
-        
-        return { 
-            success: true, 
-            printers: printerList.map(p => ({
-                name: p.Name,
-                status: p.PrinterStatus
-            }))
-        };
-    } catch (error) {
-        return { 
-            success: false, 
-            error: error.message 
-        };
-    }
-});
+        try {
+          printer
+            .font('a')
+            .align('lt')
+            .style('normal')
+            .size(0, 0);
 
-// ==========================================
-// 📤 EXPORTS (si vous utilisez des modules)
-// ==========================================
-module.exports = {
-    setupPrintHandlers: () => {
-        console.log('[Impression] Handlers installés');
-        console.log(`[Impression] Imprimante par défaut: ${POS_PRINTER_NAME}`);
+          // Gestion du contenu
+          if (ticketFormat === 'JSON') {
+            // ... (ton code JSON existant si besoin) ...
+             printer.text(JSON.stringify(ticketContent));
+          } else {
+            // Mode TEXTE BRUT (celui que tu utilises)
+            printer.text(ticketContent);
+          }
+
+          printer
+            .feed(2)
+            .cut()
+            .close(function(err) {
+                if (err) {
+                    console.error("[PRINT] Erreur fermeture:", err);
+                    reject(err);
+                } else {
+                    console.log("[PRINT] Impression terminée et port fermé.");
+                    resolve("Impression terminée");
+                }
+            });
+
+        } catch (printError) {
+          console.error("[PRINT] Erreur pendant l'envoi:", printError);
+          device.close();
+          reject(printError);
+        }
+      });
+
+    } catch (e) {
+      console.error("[PRINT] Exception critique:", e);
+      reject(e);
     }
-};
+  });
+}
+
+module.exports = { printTicket };
