@@ -17,7 +17,7 @@ export default function WelcomeScreen() {
     >
       <Image
         style={styles.backgroundImage}
-        source={require('@/assets/images/welcome.jpg')}
+        source={require('@/assets/images/welcome.png')}
         resizeMode="cover"
       />
       
