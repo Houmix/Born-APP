@@ -89,7 +89,7 @@ export default function ConfirmationPage() {
                 AsyncStorage.removeItem("lastOrderId"); 
                 AsyncStorage.removeItem("orderList"); // Vide les articles
                 AsyncStorage.removeItem("pendingOrder"); // Vide la commande en cours
-                router.push("/index"); 
+                router.push("/(tabs)"); 
             }, 10000);
         }
     };
