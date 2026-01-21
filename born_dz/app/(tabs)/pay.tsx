@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions } from "react-native";
 import { useRouter } from "expo-router";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -95,7 +95,7 @@ export default function PaymentScreen() {
                     disabled={isProcessing}
                 >
                     <Text style={styles.text}>{t('payment.cash')}</Text>
-                    <Ionicons name="cash-outline" size={400} color={isProcessing ? "#ccc" : "black"} />
+                    <Ionicons name="cash-outline" size={250} color={isProcessing ? "#ccc" : "black"} />
                 </TouchableOpacity>
 
                 <TouchableOpacity 
@@ -104,7 +104,7 @@ export default function PaymentScreen() {
                     disabled={isProcessing}
                 >
                     <Text style={styles.text}>{t('payment.card')}</Text>
-                    <AntDesign name="creditcard" size={400} color={isProcessing ? "#ccc" : "black"} />
+                    <AntDesign name="creditcard" size={250} color={isProcessing ? "#ccc" : "black"} />
                 </TouchableOpacity>
             </View>
 
@@ -122,6 +122,10 @@ export default function PaymentScreen() {
         </View>
     );
 }
+
+// Détection simple pour tablette vs mobile
+const { width } = Dimensions.get('window');
+const isTablet = width > 600;
 
 const styles = StyleSheet.create({
     main: {
@@ -141,9 +145,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
     },
     container: {
-        height: "70%",
+        flexDirection: isTablet ? "row" : "column",
+        height: "50%",
         width: "85%",
-        flexDirection: "row",
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
@@ -151,7 +155,7 @@ const styles = StyleSheet.create({
         backgroundColor: "white",
     },
     box: {
-        width: "48%",
+        width: isTablet ? "45%" : "90%",
         height: "90%",
         backgroundColor: "white",
         borderRadius: 15,

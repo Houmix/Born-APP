@@ -4,13 +4,14 @@ const fs = require('fs');
 const os = require('os');
 const { execSync } = require('child_process');
 const { SerialPort } = require('serialport');
+const express = require('express');
 
 // ==========================================
 // ⚙️ CONFIGURATION GLOBALE (CHANGE ICI !)
 // ==========================================
 // 'S' = Samsung (Méthode CMD/Fichier)
 // 'C' = Cashino (Méthode SerialPort/Flux continu)
-const ACTIVE_PROFILE = 'S'; 
+const ACTIVE_PROFILE = 'C'; 
 
 const PRINTERS = {
     S: { port: "COM4", baud: 115200, driver: 'Samsung' },
@@ -20,14 +21,38 @@ const PRINTERS = {
 const CURRENT_CONFIG = PRINTERS[ACTIVE_PROFILE];
 let mainWindow;
 let cashinoPort = null; // Connexion persistante pour Cashino
+let localServer = null; // Serveur HTTP local
+
+// ==========================================
+// 🌐 SERVEUR HTTP LOCAL (pour les chemins absolus Expo)
+// ==========================================
+function startLocalServer(webBuildPath) {
+    return new Promise((resolve) => {
+        const app = express();
+        const PORT = 8765;
+
+        // Servir les fichiers statiques
+        app.use(express.static(webBuildPath));
+
+        // Rediriger toutes les routes vers index.html (pour React Router)
+        app.get('*', (req, res) => {
+            res.sendFile(path.join(webBuildPath, 'index.html'));
+        });
+
+        localServer = app.listen(PORT, () => {
+            console.log(`✅ Serveur local démarré sur http://localhost:${PORT}`);
+            resolve(`http://localhost:${PORT}`);
+        });
+    });
+}
 
 // ==========================================
 // 🖥️ FENÊTRE PRINCIPALE
 // ==========================================
-function createWindow() {
+async function createWindow() {
     mainWindow = new BrowserWindow({
-        fullscreen:true,
-        kiosk:true,
+        fullscreen: true,
+        kiosk: true,
         frame: false,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
@@ -35,21 +60,23 @@ function createWindow() {
             nodeIntegration: false,
         },
     });
-    // --- LA CORRECTION EST ICI ---
-  if (app.isPackaged) {
-    // EN PRODUCTION : On charge le fichier local généré par le build web
-    // Assure-toi que le chemin correspond à ton dossier de build (souvent 'web-build' ou 'dist')
-    const indexPath = path.join(__dirname, 'web-build', 'index.html');
     
-    if (fs.existsSync(indexPath)) {
-      mainWindow.loadFile(indexPath);
+    if (app.isPackaged) {
+        // EN PRODUCTION : Serveur local pour gérer les chemins absolus
+        const webBuildPath = path.join(process.resourcesPath, 'web-build');
+        
+        if (fs.existsSync(webBuildPath)) {
+            console.log("📁 Démarrage du serveur local pour web-build...");
+            const url = await startLocalServer(webBuildPath);
+            mainWindow.loadURL(url);
+        } else {
+            console.error("❌ Dossier web-build introuvable:", webBuildPath);
+        }
+        
     } else {
-      console.error("Fichier index.html introuvable dans web-build !");
+        // EN DÉVELOPPEMENT : Serveur Expo
+        mainWindow.loadURL('http://localhost:8001');
     }
-  } else {
-    // EN DÉVELOPPEMENT : On utilise le serveur Expo/React
-    mainWindow.loadURL('http://localhost:8001');
-  }
 }
 
 // ==========================================
@@ -193,10 +220,10 @@ async function printCashino(ticketContent) {
 }
 
 // ==========================================
-// 🏁 INITIALISATION
+// 🚀 INITIALISATION
 // ==========================================
-app.whenReady().then(() => {
-    createWindow();
+app.whenReady().then(async () => {
+    await createWindow();
     
     // On lance la connexion persistante SEULEMENT si on est en mode Cashino
     if (ACTIVE_PROFILE === 'C') {
@@ -205,5 +232,12 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit();
+    // Fermer le serveur local
+    if (localServer) {
+        localServer.close();
+    }
+    
+    if (process.platform !== 'darwin') {
+        app.quit();
+    }
 });

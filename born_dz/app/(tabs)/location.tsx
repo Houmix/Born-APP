@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Dimensions } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -82,7 +82,7 @@ export default function LocationScreen() {
                     onPress={() => eatin()}
                 >
                     <Text style={styles.text}>{t('location.eat_in')}</Text>
-                    <MaterialIcons name="table-restaurant" size={400} color="black" />
+                    <MaterialIcons name="table-restaurant" size={250} color="black" />
                 </TouchableOpacity>
 
                 <TouchableOpacity 
@@ -90,7 +90,7 @@ export default function LocationScreen() {
                     onPress={() => takeaway()}
                 >
                     <Text style={styles.text}>{t('location.takeaway')}</Text>
-                    <MaterialIcons name="food-bank" size={400} color="black" />
+                    <MaterialIcons name="food-bank" size={250} color="black" />
                 </TouchableOpacity>
             </View>
 
@@ -102,6 +102,9 @@ export default function LocationScreen() {
         </View>
     );
 }
+// Détection simple pour tablette vs mobile
+const { width } = Dimensions.get('window');
+const isTablet = width > 600;
 
 const styles = StyleSheet.create({
     main: {
@@ -121,9 +124,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
     },
     container: {
-        height: "70%",
+    flexDirection: isTablet ? "row" : "column",
+        height: "50%",
         width: "85%",
-        flexDirection: "row",
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
