@@ -3,7 +3,8 @@ import { Text, View, StyleSheet, TextInput, TouchableOpacity } from "react-nativ
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from "expo-router";
-import { POS_URL, idRestaurant } from "@/config";
+import { idRestaurant } from "@/config";
+import { getPosUrl } from "@/utils/serverConfig";
 
 export default function identificationScreen() {
     const navigation = useNavigation();
@@ -41,7 +42,7 @@ export default function identificationScreen() {
             
             // ✅ ÉTAPE 1 : Récupérer ou créer le token
             const tokenResponse = await axios.post(
-                `${POS_URL}/user/api/user/token/`,
+                `${getPosUrl()}/user/api/user/token/`,
                 { phone: phoneNumber }
             );
             
@@ -55,7 +56,7 @@ export default function identificationScreen() {
             
             // ✅ ÉTAPE 2 : Récupérer les détails de l'utilisateur
             const userResponse = await axios.post(
-                `${POS_URL}/user/api/getUser/`,
+                `${getPosUrl()}/user/api/getUser/`,
                 { phone: phoneNumber },
                 {
                     headers: {
@@ -112,7 +113,7 @@ export default function identificationScreen() {
                 console.log("⚠️ Token manquant, récupération...");
                 
                 const response = await axios.post(
-                    `${POS_URL}/user/api/user/token/`,
+                    `${getPosUrl()}/user/api/user/token/`,
                     { phone: null }
                 );
                 

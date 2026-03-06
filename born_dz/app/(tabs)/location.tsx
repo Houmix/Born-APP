@@ -34,10 +34,10 @@ export default function LocationScreen() {
         try {
             const stored = await AsyncStorage.getItem("pendingOrder");
             if (stored) {
-                const orderData = JSON.parse(stored);
-                orderData.takeaway = false;
-                await AsyncStorage.setItem("pendingOrder", JSON.stringify(orderData));
-                console.log("Commande mise à jour pour Sur Place :", orderData);
+                // Stocker le mode séparément — pendingOrder est un array, on ne peut
+                // pas lui ajouter de propriété qui survive à JSON.stringify.
+                await AsyncStorage.setItem("orderTakeaway", "false");
+                console.log("Sur place sélectionné");
                 router.push("/pay");
             } else {
                 setErrorMessage(t('errors.no_order'));
@@ -54,10 +54,8 @@ export default function LocationScreen() {
         try {
             const stored = await AsyncStorage.getItem("pendingOrder");
             if (stored) {
-                const orderData = JSON.parse(stored);
-                orderData.takeaway = true;
-                await AsyncStorage.setItem("pendingOrder", JSON.stringify(orderData));
-                console.log("Commande mise à jour pour A Emporter :", orderData);
+                await AsyncStorage.setItem("orderTakeaway", "true");
+                console.log("À emporter sélectionné");
                 router.push("/pay");
             } else {
                 setErrorMessage(t('errors.no_order'));

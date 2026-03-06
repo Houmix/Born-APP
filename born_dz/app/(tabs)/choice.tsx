@@ -3,7 +3,8 @@ import { useRouter } from "expo-router";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
-import { POS_URL, idRestaurant } from "@/config";
+import { idRestaurant } from "@/config";
+import { getPosUrl } from "@/utils/serverConfig";
 import { useEffect } from "react";
 
 // Assurez-vous que votre logo est bien à cet emplacement
@@ -15,7 +16,7 @@ export default function IndexScreen() {
   // Fonction pour récupérer le token anonyme et configurer le restaurant
   const getToken = async () => {
     try {
-      const response = await axios.post(`${POS_URL}/user/api/user/token/0`);
+      const response = await axios.post(`${getPosUrl()}/user/api/user/token/0`);
       
       if (response.status == 200 || response.status == 201) {
         console.log("✅ Token anonyme récupéré");

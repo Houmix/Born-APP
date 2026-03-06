@@ -2,9 +2,8 @@ import { AppState, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios'; 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { POS_URL, idRestaurant} from '@/config';
-
-const WEBSOCKET_URL = `${POS_URL}/ws/borne/sync/`;
+import { idRestaurant} from '@/config';
+import { getPosUrl } from '@/utils/serverConfig';
 const GROUP_MENU_KEY = 'GroupMenu';
 const MENU_KEY = 'Menu';
 const STEPS_INVALIDATION_FLAG = 'steps_cache_invalidated';
@@ -34,7 +33,7 @@ export function useBorneSync() {
 
             // Récupération des catégories
             const categoriesResponse = await axios.get(
-                `${POS_URL}/menu/api/getGroupMenuList/${currentRestaurantId}/`, 
+                `${getPosUrl()}/menu/api/getGroupMenuList/${currentRestaurantId}/`,
                 { headers }
             );
             const availableCategories = categoriesResponse.data.filter((category) => category.avalaible);
@@ -43,7 +42,7 @@ export function useBorneSync() {
 
             // Récupération des menus
             const menusResponse = await axios.get(
-                `${POS_URL}/menu/api/getAllMenu/${currentRestaurantId}/`, 
+                `${getPosUrl()}/menu/api/getAllMenu/${currentRestaurantId}/`, 
                 { headers }
             );
             setMenus(menusResponse.data);
@@ -87,9 +86,9 @@ export function useBorneSync() {
             console.log('[WS] Déjà connecté');
             return;
         }
-    
+
         console.log('[WS] Connexion...');
-        const socket = new WebSocket(WEBSOCKET_URL);
+        const socket = new WebSocket(`${getPosUrl().replace(/^http/, 'ws')}/ws/borne/sync/`);
         ws.current = socket;
     
         socket.onopen = () => {
@@ -143,7 +142,7 @@ export function useBorneSync() {
         
         try {
             console.log(`[STEPS] Récupération API pour menu ${menuId}`);
-            const response = await axios.get(`${POS_URL}/menu/api/stepListByMenu/${menuId}/`, { headers });
+            const response = await axios.get(`${getPosUrl()}/menu/api/stepListByMenu/${menuId}/`, { headers });
             
             await AsyncStorage.setItem(STEPS_KEY, JSON.stringify(response.data));
             if (isCacheInvalid === 'true') {

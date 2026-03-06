@@ -4,7 +4,8 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import { POS_URL, idRestaurant} from "@/config";
+import { idRestaurant} from "@/config";
+import { getPosUrl } from "@/utils/serverConfig";
 import { useEffect, useState } from "react";
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -36,23 +37,26 @@ export default function PaymentScreen() {
 
     const processPayment = async (paymentMethod) => {
         if (isProcessing) return;
-        
+
         setIsProcessing(true);
         try {
             const Employee_id = await AsyncStorage.getItem("Employee_id");
             const restaurantId = idRestaurant;
-            
+            const takeawayValue = await AsyncStorage.getItem("orderTakeaway");
+            const isTakeaway = takeawayValue === "true";
+
             const dataToSend = {
                 user: Employee_id,
                 items: order,
                 restaurant: parseInt(restaurantId || "0", 10),
+                takeaway: isTakeaway,
             };
             
             console.log("Données à envoyer :", dataToSend);
             const accessToken = await AsyncStorage.getItem("token");
             
             const response = await axios.post(
-                `${POS_URL}/order/api/createOrder/${paymentMethod}/`,
+                `${getPosUrl()}/order/api/createOrder/${paymentMethod}/`,
                 dataToSend,
                 {
                     headers: {
@@ -63,7 +67,7 @@ export default function PaymentScreen() {
             );
 
             if (response.status === 200 || response.status === 201) {
-                await AsyncStorage.removeItem("pendingOrder");
+                await AsyncStorage.multiRemove(["pendingOrder", "orderTakeaway"]);
                 await AsyncStorage.setItem("lastOrderId", response.data.order_id.toString());
                 router.push("/confirmation");
             } else {

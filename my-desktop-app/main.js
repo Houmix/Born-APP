@@ -3,25 +3,13 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { execSync } = require('child_process');
-const { SerialPort } = require('serialport');
 const express = require('express');
 
-// ==========================================
-// ⚙️ CONFIGURATION GLOBALE (CHANGE ICI !)
-// ==========================================
-// 'S' = Samsung (Méthode CMD/Fichier)
-// 'C' = Cashino (Méthode SerialPort/Flux continu)
-const ACTIVE_PROFILE = 'C'; 
+// Imprimantes virtuelles à exclure (pas de port physique)
+const VIRTUAL_PRINTER_KEYWORDS = ['PDF', 'Fax', 'OneNote', 'XPS', 'Microsoft', 'Send to', 'Cloud'];
 
-const PRINTERS = {
-    S: { port: "COM4", baud: 115200, driver: 'Samsung' },
-    C: { port: "COM4", baud: 9600,   driver: 'Cashino' }
-};
-
-const CURRENT_CONFIG = PRINTERS[ACTIVE_PROFILE];
 let mainWindow;
-let cashinoPort = null; // Connexion persistante pour Cashino
-let localServer = null; // Serveur HTTP local
+let localServer = null;
 
 // ==========================================
 // 🌐 SERVEUR HTTP LOCAL (pour les chemins absolus Expo)
@@ -80,155 +68,290 @@ async function createWindow() {
 }
 
 // ==========================================
-// 🚀 ROUTEUR D'IMPRESSION
+// 🖨️ IMPRESSION RAW via PowerShell + winspool.drv
+// Fonctionne avec toute imprimante connectée (USB, réseau, COM)
+// sans configuration de port manuel.
 // ==========================================
-ipcMain.handle("printTicket", async (event, ticketContent) => {
-    console.log(`\n🖨️ DEMANDE IMPRESSION - PROFIL: [${ACTIVE_PROFILE}] ${CURRENT_CONFIG.driver}`);
 
-    if (ACTIVE_PROFILE === 'S') {
-        return await printSamsung(ticketContent);
-    } else if (ACTIVE_PROFILE === 'C') {
-        return await printCashino(ticketContent);
+/**
+ * Génère le script PowerShell qui envoie des octets bruts à une imprimante
+ * via l'API Windows winspool.drv (mode RAW, aucun reformatage GDI)
+ */
+function buildRawPrintScript(filePath, printerName) {
+    const safePrinter = printerName.replace(/'/g, "''");
+    const safePath = filePath.replace(/\\/g, '\\\\');
+
+    return `
+$ErrorActionPreference = 'Stop'
+
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public class RawPrinterHelper
+{
+    [StructLayout(LayoutKind.Sequential)]
+    public struct DOCINFOA
+    {
+        [MarshalAs(UnmanagedType.LPStr)] public string pDocName;
+        [MarshalAs(UnmanagedType.LPStr)] public string pOutputFile;
+        [MarshalAs(UnmanagedType.LPStr)] public string pDataType;
     }
-});
 
-// ==========================================
-// 🛠️ DRIVER A : SAMSUNG (Méthode Shell/CMD)
-// ==========================================
-async function printSamsung(ticketContent) {
-    const tempFilePath = path.join(os.tmpdir(), `ticket_${Date.now()}.txt`);
-    const { port, baud } = CURRENT_CONFIG;
+    [DllImport("winspool.drv", SetLastError = true, CharSet = CharSet.Ansi)]
+    public static extern bool OpenPrinter(string pPrinterName, out IntPtr phPrinter, IntPtr pDefault);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool StartDocPrinter(IntPtr hPrinter, int level, ref DOCINFOA pDocInfo);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool StartPagePrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool WritePrinter(IntPtr hPrinter, IntPtr pBytes, int dwCount, out int dwWritten);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool EndPagePrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool EndDocPrinter(IntPtr hPrinter);
+
+    [DllImport("winspool.drv", SetLastError = true)]
+    public static extern bool ClosePrinter(IntPtr hPrinter);
+
+    public static bool SendBytesToPrinter(string printerName, byte[] data)
+    {
+        IntPtr hPrinter = IntPtr.Zero;
+        DOCINFOA docInfo = new DOCINFOA();
+        docInfo.pDocName = "ClickGo Ticket";
+        docInfo.pDataType = "RAW";
+
+        bool success = false;
+
+        if (OpenPrinter(printerName, out hPrinter, IntPtr.Zero))
+        {
+            if (StartDocPrinter(hPrinter, 1, ref docInfo))
+            {
+                if (StartPagePrinter(hPrinter))
+                {
+                    IntPtr unmanagedBytes = Marshal.AllocCoTaskMem(data.Length);
+                    Marshal.Copy(data, 0, unmanagedBytes, data.Length);
+
+                    int bytesWritten;
+                    success = WritePrinter(hPrinter, unmanagedBytes, data.Length, out bytesWritten);
+                    success = success && (bytesWritten == data.Length);
+
+                    Marshal.FreeCoTaskMem(unmanagedBytes);
+                    EndPagePrinter(hPrinter);
+                }
+                EndDocPrinter(hPrinter);
+            }
+            ClosePrinter(hPrinter);
+        }
+
+        return success;
+    }
+}
+'@ -ErrorAction SilentlyContinue
+
+$bytes = [System.IO.File]::ReadAllBytes('${safePath}')
+$result = [RawPrinterHelper]::SendBytesToPrinter('${safePrinter}', $bytes)
+Write-Output $result
+`;
+}
+
+/**
+ * Scanne tous les ports COM disponibles et tente d'envoyer les données ESC/POS
+ * (imprimantes série sans pilote Windows)
+ */
+async function printToComPorts(dataBuffer) {
+    let SerialPort;
+    try {
+        ({ SerialPort } = require('serialport'));
+    } catch (e) {
+        console.warn('[COM] Module serialport non disponible:', e.message);
+        return [];
+    }
+
+    let ports = [];
+    try {
+        ports = await SerialPort.list();
+    } catch (e) {
+        console.warn('[COM] Impossible de lister les ports COM:', e.message);
+        return [];
+    }
+
+    if (ports.length === 0) {
+        console.log('[COM] Aucun port COM détecté.');
+        return [];
+    }
+
+    console.log(`[COM] ${ports.length} port(s) COM : ${ports.map(p => p.path).join(', ')}`);
+
+    const BAUD_RATES = [9600, 19200, 38400, 115200];
+    const results = [];
+
+    for (const portInfo of ports) {
+        const portPath = portInfo.path;
+        let sent = false;
+
+        for (const baudRate of BAUD_RATES) {
+            if (sent) break;
+            try {
+                await new Promise((resolve, reject) => {
+                    const port = new SerialPort({ path: portPath, baudRate, autoOpen: false });
+                    const timer = setTimeout(() => {
+                        try { port.close(); } catch (e) {}
+                        reject(new Error('Timeout'));
+                    }, 3000);
+
+                    port.open((err) => {
+                        if (err) { clearTimeout(timer); return reject(err); }
+                        port.write(dataBuffer, (writeErr) => {
+                            if (writeErr) {
+                                clearTimeout(timer);
+                                port.close();
+                                return reject(writeErr);
+                            }
+                            port.drain(() => {
+                                clearTimeout(timer);
+                                port.close();
+                                resolve();
+                            });
+                        });
+                    });
+                });
+                sent = true;
+                console.log(`[COM] OK "${portPath}" @${baudRate}`);
+                results.push({ printer: portPath, status: 'success' });
+            } catch (e) {
+                // essai baud rate suivant
+            }
+        }
+
+        if (!sent) {
+            console.warn(`[COM] ÉCHEC "${portPath}"`);
+            results.push({ printer: portPath, status: 'error', error: 'Aucun baud rate accepté' });
+        }
+    }
+
+    return results;
+}
+
+ipcMain.handle("printTicket", async (event, ticketText) => {
+    const tempFilePath = path.join(os.tmpdir(), `ticket-${Date.now()}.bin`);
 
     try {
-        // 1. Préparation du contenu (UTF-8 pour Samsung)
-        const GS = '\x1D';
-        const CUT_COMMAND = '\n\n\n\n' + GS + 'V' + '\x00';
-        const fullContent = ticketContent + CUT_COMMAND;
-        
-        fs.writeFileSync(tempFilePath, fullContent, { encoding: 'utf8' });
+        console.log('[Impression] Préparation du ticket...');
 
-        // 2. Configuration du port via CMD
-        try {
-            execSync(`mode ${port}: BAUD=${baud} PARITY=N DATA=8 STOP=1`, { windowsHide: true });
-        } catch (e) { /* Ignorer si déjà configuré */ }
+        // ── 1. Commandes ESC/POS ──
+        const ESC = '\x1B';
+        const GS  = '\x1D';
 
-        // 3. Envoi via CMD
-        execSync(`type "${tempFilePath}" > ${port}`, { 
-            windowsHide: true, 
-            shell: 'cmd.exe', 
-            timeout: 5000 
+        const INIT          = ESC + '@';                    // Reset imprimante
+        const MARGIN_LEFT_0 = GS + 'L' + '\x00' + '\x00'; // Marge gauche = 0
+        // GS W absent volontairement : largeur pleine par défaut selon le modèle
+        const ALIGN_LEFT    = ESC + 'a' + '\x00';          // Alignement gauche
+        const FONT_NORMAL   = ESC + '!' + '\x00';          // Police normale (Font A)
+        const LINE_SPACING  = ESC + '3' + '\x12';          // Interligne serré
+        const LINE_FEEDS    = '\n\n\n\n\n';                // Espace avant coupe
+        const CUT_COMMAND   = GS + 'V' + '\x42' + '\x00'; // Coupe complète
+
+        const fullContent = INIT
+            + MARGIN_LEFT_0
+            + ALIGN_LEFT
+            + FONT_NORMAL
+            + LINE_SPACING
+            + ticketText
+            + LINE_FEEDS
+            + CUT_COMMAND;
+
+        // ── 2. Écriture fichier binaire (latin1 préserve les octets ESC/POS) ──
+        fs.writeFileSync(tempFilePath, fullContent, { encoding: 'latin1' });
+
+        // ── 3. Récupérer les imprimantes physiques ──
+        if (!mainWindow) {
+            throw new Error("La fenêtre principale n'est pas active.");
+        }
+
+        const allPrinters = await mainWindow.webContents.getPrintersAsync();
+        const physicalPrinters = allPrinters.filter(p => {
+            const name = p.name.toLowerCase();
+            return !VIRTUAL_PRINTER_KEYWORDS.some(kw => name.includes(kw.toLowerCase()));
         });
 
-        console.log(`✅ [Samsung] Envoyé sur ${port}`);
-        return { success: true };
+        if (physicalPrinters.length === 0) {
+            console.warn('[Impression] Aucune imprimante via spooler → scan ports COM...');
+            const dataBuffer = Buffer.from(fullContent, 'latin1');
+            const comResults = await printToComPorts(dataBuffer);
+            const comSuccess = comResults.some(r => r.status === 'success');
+            return { success: comSuccess, details: comResults, error: comSuccess ? undefined : "Aucune imprimante disponible" };
+        }
+
+        console.log(`[Impression] ${physicalPrinters.length} imprimante(s) : ${physicalPrinters.map(p => p.name).join(', ')}`);
+
+        // ── 4. Envoi RAW via winspool.drv (PowerShell) ──
+        const results = [];
+
+        for (const printer of physicalPrinters) {
+            const printerName = printer.name;
+            console.log(`[Impression] --> Envoi vers "${printerName}"...`);
+
+            try {
+                const psScript = buildRawPrintScript(tempFilePath, printerName);
+                const scriptPath = path.join(os.tmpdir(), `print-script-${Date.now()}.ps1`);
+                fs.writeFileSync(scriptPath, psScript, { encoding: 'utf-8' });
+
+                const output = execSync(
+                    `powershell -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`,
+                    { windowsHide: true, timeout: 10000, encoding: 'utf-8' }
+                ).trim();
+
+                try { fs.unlinkSync(scriptPath); } catch (e) {}
+
+                if (output === 'True') {
+                    console.log(`[Impression] OK "${printerName}"`);
+                    results.push({ printer: printerName, status: 'success' });
+                } else {
+                    throw new Error(`WritePrinter a retourné: ${output}`);
+                }
+
+            } catch (err) {
+                console.error(`[Impression] ÉCHEC "${printerName}": ${err.message}`);
+                results.push({ printer: printerName, status: 'error', error: err.message });
+            }
+        }
+
+        // ── 5. Fallback COM si aucun succès via spooler ──
+        if (!results.some(r => r.status === 'success')) {
+            console.log('[Impression] Spooler sans succès → scan ports COM...');
+            const dataBuffer = Buffer.from(fullContent, 'latin1');
+            const comResults = await printToComPorts(dataBuffer);
+            results.push(...comResults);
+        }
+
+        // ── 6. Nettoyage ──
+        setTimeout(() => {
+            try { if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath); } catch (e) {}
+        }, 2000);
+
+        const successCount = results.filter(r => r.status === 'success').length;
+        console.log(`[Impression] Terminé : ${successCount}/${results.length} OK`);
+
+        return { success: successCount > 0, details: results };
 
     } catch (error) {
-        console.error(`❌ [Samsung] Erreur: ${error.message}`);
+        console.error(`[Impression] ERREUR: ${error.message}`);
+        try { if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath); } catch (e) {}
         return { success: false, error: error.message };
-    } finally {
-        if (fs.existsSync(tempFilePath)) fs.unlinkSync(tempFilePath);
     }
-}
-
-// ==========================================
-// 🛠️ DRIVER B : CASHINO (Méthode SerialPort Persistante)
-// ==========================================
-
-// 1. Gestion de la connexion (Appelée au démarrage)
-function connectCashino() {
-    if (cashinoPort && cashinoPort.isOpen) return;
-    const { port, baud } = CURRENT_CONFIG;
-
-    console.log(`🔌 [Cashino] Connexion persistante au ${port}...`);
-    cashinoPort = new SerialPort({
-        path: port,
-        baudRate: baud,
-        dataBits: 8,
-        parity: 'none',
-        stopBits: 1,
-        autoOpen: false,
-        rtscts: false
-    });
-
-    cashinoPort.open((err) => {
-        if (err) {
-            console.error(`❌ [Cashino] Échec connexion: ${err.message}`);
-            setTimeout(connectCashino, 5000); // Retry auto
-        } else {
-            console.log(`✅ [Cashino] Connecté sur ${port}`);
-        }
-    });
-
-    cashinoPort.on('close', () => {
-        console.warn("⚠️ [Cashino] Déconnecté ! Tentative de reconnexion...");
-        cashinoPort = null;
-        setTimeout(connectCashino, 5000);
-    });
-    
-    cashinoPort.on('error', (err) => console.error(`❌ [Cashino] Erreur Port: ${err.message}`));
-}
-
-// 2. Logique d'envoi par paquets (Chunking)
-async function printCashino(ticketContent) {
-    if (!cashinoPort || !cashinoPort.isOpen) {
-        connectCashino();
-        return { success: false, error: "Imprimante déconnectée, réessayez dans 5s..." };
-    }
-
-    return new Promise((resolve) => {
-        // Préparation Buffer (Latin1 pour Cashino)
-        const ESC = 0x1B;
-        const GS = 0x1D;
-        const header = Buffer.from([ESC, 0x40, ESC, 0x61, 0x01, ESC, 0x45, 0x01]); 
-        
-        // Nettoyage texte
-        const cleanContent = ticketContent.replace(/\r\n/g, '\n').replace(/\n/g, '\n');
-        const content = Buffer.from(cleanContent + '\n\n', 'latin1'); 
-        const footer = Buffer.from([0x0A, 0x0A, 0x0A, 0x0A, GS, 0x56, 0x42, 0x00]);
-
-        const fullData = Buffer.concat([header, content, footer]);
-
-        // Envoi lent (16 bytes par 50ms)
-        const CHUNK_SIZE = 16; 
-        let currentOffset = 0;
-
-        function sendNextChunk() {
-            if (currentOffset >= fullData.length) {
-                cashinoPort.drain(() => {
-                    console.log("✅ [Cashino] Impression terminée (Buffer vidé)");
-                    resolve({ success: true });
-                });
-                return;
-            }
-
-            const end = Math.min(currentOffset + CHUNK_SIZE, fullData.length);
-            const chunk = fullData.slice(currentOffset, end);
-
-            cashinoPort.write(chunk, (err) => {
-                if (err) {
-                    console.error("❌ [Cashino] Erreur écriture:", err);
-                    resolve({ success: false, error: err.message });
-                    if (cashinoPort.isOpen) cashinoPort.close();
-                    return;
-                }
-                currentOffset += CHUNK_SIZE;
-                setTimeout(sendNextChunk, 50); // Pause moteur
-            });
-        }
-        sendNextChunk();
-    });
-}
+});
 
 // ==========================================
 // 🚀 INITIALISATION
 // ==========================================
 app.whenReady().then(async () => {
     await createWindow();
-    
-    // On lance la connexion persistante SEULEMENT si on est en mode Cashino
-    if (ACTIVE_PROFILE === 'C') {
-        connectCashino();
-    }
 });
 
 app.on('window-all-closed', () => {
