@@ -1,12 +1,12 @@
 import { Stack } from "expo-router";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { KioskThemeProvider } from "@/contexts/KioskThemeContext";
+import { BorneSyncProvider } from "@/contexts/BorneSyncProvider";
 import { useEffect, useState, useCallback } from "react";
 import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
-import { loadServerUrl, hasSavedServerUrl, getPosUrl } from "@/utils/serverConfig";
+import { loadServerUrl, hasSavedServerUrl, getPosUrl, loadRestaurantId, getRestaurantId, saveRestaurantId } from "@/utils/serverConfig";
 import ServerSetup from "@/components/ServerSetup";
 import axios from "axios";
-import { idRestaurant } from "@/config";
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -14,9 +14,10 @@ export default function RootLayout() {
   const [licenseValid, setLicenseValid] = useState(true);
 
   const checkLicense = useCallback(async () => {
+    const restaurantId = getRestaurantId();
     try {
       const response = await axios.get(
-        `${getPosUrl()}/api/license/restaurant-status/?restaurant_id=${idRestaurant}`,
+        `${getPosUrl()}/api/license/restaurant-status/?restaurant_id=${restaurantId || 1}`,
         { timeout: 5000 }
       );
       setLicenseValid(response.data.valid === true);
@@ -30,11 +31,31 @@ export default function RootLayout() {
     async function init() {
       const hasUrl = await hasSavedServerUrl();
       await loadServerUrl();
+      await loadRestaurantId();
 
       if (!hasUrl) {
         setNeedsSetup(true);
         setReady(true);
         return;
+      }
+
+      // Si le restaurant_id n'est pas encore sauvegardé (ancienne session), le récupérer via discover
+      if (!getRestaurantId()) {
+        try {
+          const controller = new AbortController();
+          const t = setTimeout(() => controller.abort(), 3000);
+          const resp = await fetch(`${getPosUrl()}/api/sync/discover/`, { signal: controller.signal });
+          clearTimeout(t);
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.restaurant_id) {
+              await saveRestaurantId(data.restaurant_id.toString());
+              console.log('[Layout] restaurant_id récupéré via discover:', data.restaurant_id);
+            }
+          }
+        } catch (e) {
+          console.warn('[Layout] discover échoué, restaurant_id reste null');
+        }
       }
 
       await checkLicense();
@@ -76,14 +97,16 @@ export default function RootLayout() {
   }
 
   return (
-    <LanguageProvider>
-      <KioskThemeProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-      </KioskThemeProvider>
-    </LanguageProvider>
+    <BorneSyncProvider>
+      <LanguageProvider>
+        <KioskThemeProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="+not-found" />
+          </Stack>
+        </KioskThemeProvider>
+      </LanguageProvider>
+    </BorneSyncProvider>
   );
 }
 

@@ -3,8 +3,7 @@ import { Text, View, StyleSheet, TextInput, TouchableOpacity } from "react-nativ
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from "expo-router";
-import { idRestaurant } from "@/config";
-import { getPosUrl } from "@/utils/serverConfig";
+import { getPosUrl, getRestaurantId } from "@/utils/serverConfig";
 
 export default function identificationScreen() {
     const navigation = useNavigation();
@@ -73,12 +72,12 @@ export default function identificationScreen() {
             await AsyncStorage.setItem("User_id", userData.id.toString());
             await AsyncStorage.setItem("User_phone", userData.phone);
             await AsyncStorage.setItem("Employee_id", userData.id.toString());
-            await AsyncStorage.setItem("Employee_restaurant_id", idRestaurant.toString());
+            await AsyncStorage.setItem("Employee_restaurant_id", getRestaurantId().toString());
             
             console.log("✅ Session utilisateur créée:", {
                 user_id: userData.id,
                 phone: userData.phone,
-                restaurant: idRestaurant
+                restaurant: getRestaurantId()
             });
             
             // ✅ ÉTAPE 4 : Redirection
@@ -120,7 +119,7 @@ export default function identificationScreen() {
                 token = response.data.access;
                 
                 await AsyncStorage.setItem("token", token);
-                await AsyncStorage.setItem("Employee_restaurant_id", idRestaurant.toString());
+                await AsyncStorage.setItem("Employee_restaurant_id", getRestaurantId().toString());
             }
             
             // Mode anonyme : Employee_id = 0
@@ -128,7 +127,7 @@ export default function identificationScreen() {
             
             console.log("✅ Mode anonyme configuré:", {
                 token: "Présent",
-                restaurant: idRestaurant,
+                restaurant: getRestaurantId(),
                 employee: 0
             });
             

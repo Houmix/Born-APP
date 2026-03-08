@@ -312,9 +312,9 @@ export default function MenuScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.loadingContainer, { backgroundColor: theme.backgroundColor }]}>
         <ActivityIndicator size="large" color={theme.primaryColor} />
-        <Text style={styles.loadingText}>{t('terminal.loading_menus')}</Text>
+        <Text style={[styles.loadingText, { color: theme.textColor }]}>{t('terminal.loading_menus')}</Text>
       </View>
     );
   }
@@ -327,11 +327,11 @@ export default function MenuScreen() {
   );
 
   return (
-    <View style={[styles.container, isRTL && { direction: 'rtl' }]} {...panResponder.panHandlers}>
+    <View style={[styles.container, { backgroundColor: theme.backgroundColor }, isRTL && { direction: 'rtl' }]} {...panResponder.panHandlers}>
 
       {/* HEADER AVEC DÉGRADÉ (couleurs personnalisables) */}
       <LinearGradient
-        colors={[theme.primaryColor, theme.secondaryColor]}
+        colors={[theme.primaryColor, theme.primaryColor]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.header}
@@ -367,10 +367,8 @@ export default function MenuScreen() {
               key={category.id}
               style={[
                 styles.categoryButton,
-                selectedCategory?.id === category.id && [
-                  styles.selectedCategory,
-                  { borderColor: theme.secondaryColor },
-                ],
+                { backgroundColor: selectedCategory?.id === category.id ? theme.selectedCategoryBgColor : theme.categoryBgColor },
+                selectedCategory?.id === category.id && { borderLeftWidth: 4, borderColor: theme.secondaryColor },
               ]}
               onPress={() => setSelectedCategory(category)}
             >
@@ -382,10 +380,7 @@ export default function MenuScreen() {
               )}
               <Text style={[
                 styles.categoryText,
-                selectedCategory?.id === category.id && [
-                  styles.selectedCategoryText,
-                  { color: theme.secondaryColor },
-                ],
+                { color: selectedCategory?.id === category.id ? theme.secondaryColor : theme.categoryTextColor },
               ]}>
                 {category.name}
               </Text>
@@ -409,31 +404,32 @@ export default function MenuScreen() {
                 <TouchableOpacity
                   style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2 }]}
                   onPress={() => handleAddToCart(item)}
+                  activeOpacity={0.85}
                 >
-                  {item.photo && (
-                    <Image
-                      source={{ uri: `${getPosUrl()}${item.photo}` }}
-                      style={styles.menuImage}
-                      resizeMode="cover"
-                    />
-                  )}
-                  <View style={styles.menuInfo}>
+                  <Image
+                    source={item.photo ? { uri: `${getPosUrl()}${item.photo}` } : require('@/assets/logo.png')}
+                    style={StyleSheet.absoluteFill}
+                    resizeMode="cover"
+                  />
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.82)']}
+                    style={styles.menuOverlay}
+                  >
                     <Text style={styles.menuText} numberOfLines={2}>{item.name}</Text>
                     <View style={styles.priceActionContainer}>
-                      <Text style={[styles.menuPrice, { color: theme.primaryColor }]}>
+                      <Text style={[styles.menuPrice, { color: theme.secondaryColor }]}>
                         {item.extra == 1
                           ? `+${item.solo_price}`
                           : (item.price && parseFloat(item.price) > 0)
                             ? `${item.price}`
                             : `${item.solo_price}`
-                        }
-                        <Text style={{ fontSize: 14 }}> DA</Text>
+                        } DA
                       </Text>
                       <View style={[styles.addButton, { backgroundColor: theme.secondaryColor }]}>
                         <Feather name="plus" size={20} color="white" />
                       </View>
                     </View>
-                  </View>
+                  </LinearGradient>
                 </TouchableOpacity>
               )}
               contentContainerStyle={styles.menuGrid}
@@ -451,9 +447,9 @@ export default function MenuScreen() {
 
 const styles = StyleSheet.create({
   logoImage: { width: 220, height: 80 },
-  container: { flex: 1, backgroundColor: "#F8F9FA" },
-  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#F8F9FA" },
-  loadingText: { fontSize: 24, textAlign: "center", marginTop: 20, color: "#1e293b", fontWeight: '600' },
+  container: { flex: 1, backgroundColor: "#F8F9FA" },   // surchargé inline
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  loadingText: { fontSize: 24, textAlign: "center", marginTop: 20, fontWeight: '600' },
 
   header: {
     height: 90,
@@ -482,23 +478,29 @@ const styles = StyleSheet.create({
   },
   selectedCategoryText: { fontWeight: '700' },
   categoryImage: { width: "100%", height: 130, marginBottom: 10, borderRadius: 10, backgroundColor: 'white' },
-  categoryText: { color: "#94a3b8", fontSize: 15, fontWeight: "600", textAlign: "center" },
+  categoryText: { fontSize: 15, fontWeight: "600", textAlign: "center" },
 
   menuGridContainer: { padding: 15 },
   menuGrid: { justifyContent: "flex-start", alignItems: "flex-start" },
   menuItem: {
-    height: 280, aspectRatio: 0.8, backgroundColor: "#fff", borderRadius: 20, overflow: 'hidden',
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 8,
-    elevation: 3, marginBottom: 20,
+    aspectRatio: 0.72, borderRadius: 22, overflow: 'hidden',
+    backgroundColor: '#1e293b',
+    shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12,
+    elevation: 6, marginBottom: 16,
   },
-  menuImage: { width: "100%", height: "55%" },
-  menuInfo: { padding: 15, flex: 1, justifyContent: 'space-between' },
-  menuText: { fontSize: 17, fontWeight: "700", textAlign: "left", color: "#1e293b", marginBottom: 5 },
+  menuOverlay: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingHorizontal: 12, paddingBottom: 12, paddingTop: 40,
+  },
+  menuText: {
+    color: 'white', fontSize: 14, fontWeight: '700', marginBottom: 6,
+    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
+  },
   priceActionContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  menuPrice: { fontSize: 20, fontWeight: "800" },
+  menuPrice: { fontSize: 16, fontWeight: '900' },
   addButton: {
-    width: 36, height: 36, borderRadius: 18,
-    justifyContent: 'center', alignItems: 'center', elevation: 2,
+    width: 38, height: 38, borderRadius: 19,
+    justifyContent: 'center', alignItems: 'center', elevation: 4,
   },
   emptyGrid: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyGridText: { fontSize: 20, color: '#94a3b8', textAlign: 'center' },

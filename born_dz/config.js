@@ -1,3 +1,2 @@
-// L'URL du serveur est maintenant dynamique.
-// Utilisez getPosUrl() depuis @/utils/serverConfig dans vos composants.
-export const idRestaurant = 1;
+// Ce fichier est conservé pour compatibilité mais n'est plus utilisé.
+// L'URL serveur et le restaurant_id sont gérés dynamiquement via @/utils/serverConfig

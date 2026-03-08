@@ -1,58 +1,73 @@
-import { AppState, Alert } from 'react-native';
+import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios'; 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { idRestaurant} from '@/config';
-import { getPosUrl } from '@/utils/serverConfig';
+import axios from 'axios';
+import { useState, useEffect, useCallback } from 'react';
+import { getPosUrl, getRestaurantId, loadRestaurantId } from '@/utils/serverConfig';
+import {
+    addMenuRefreshListener,
+    removeMenuRefreshListener,
+    STEPS_INVALIDATION_FLAG,
+} from '@/utils/syncListeners';
+
 const GROUP_MENU_KEY = 'GroupMenu';
 const MENU_KEY = 'Menu';
-const STEPS_INVALIDATION_FLAG = 'steps_cache_invalidated';
+
+// Récupère (ou rafraîchit) le token anonyme de la borne
+async function getOrRefreshToken() {
+    const existing = await AsyncStorage.getItem('token');
+    if (existing) return existing;
+
+    try {
+        const resp = await axios.post(`${getPosUrl()}/user/api/user/token/0`, {}, { timeout: 5000 });
+        const token = resp.data.access;
+        await AsyncStorage.setItem('token', token);
+        await AsyncStorage.setItem('Employee_id', '0');
+        return token;
+    } catch (e) {
+        console.error('[SYNC] Impossible d\'obtenir le token anonyme:', e.message);
+        return null;
+    }
+}
 
 export function useBorneSync() {
     const [categories, setCategories] = useState([]);
     const [menus, setMenus] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
-    const ws = useRef(null);
     const [restaurantId, setRestaurantId] = useState(null);
 
     // --- 1. CHARGEMENT DES DONNÉES ---
     const fetchAndCacheAllData = useCallback(async () => {
         setIsLoading(true);
         try {
-            const accessToken = await AsyncStorage.getItem("token");
-            const currentRestaurantId = idRestaurant;
-            
-            if (!accessToken || !currentRestaurantId) {
-                console.error("[SYNC ERROR] Token ou ID Restaurant manquant.");
-                Alert.alert("Erreur d'authentification", "Veuillez vous reconnecter.");
+            // Essayer en mémoire d'abord, puis AsyncStorage si null
+            let currentRestaurantId = getRestaurantId();
+            if (!currentRestaurantId) currentRestaurantId = await loadRestaurantId();
+            if (!currentRestaurantId) {
+                console.error('[SYNC] Restaurant ID manquant');
                 return;
             }
-            
+
+            const accessToken = await getOrRefreshToken();
+            if (!accessToken) return;
+
             setRestaurantId(currentRestaurantId);
             const headers = { Authorization: `Bearer ${accessToken}` };
 
-            // Récupération des catégories
-            const categoriesResponse = await axios.get(
-                `${getPosUrl()}/menu/api/getGroupMenuList/${currentRestaurantId}/`,
-                { headers }
-            );
-            const availableCategories = categoriesResponse.data.filter((category) => category.avalaible);
+            const [catResp, menuResp] = await Promise.all([
+                axios.get(`${getPosUrl()}/menu/api/getGroupMenuList/${currentRestaurantId}/`, { headers }),
+                axios.get(`${getPosUrl()}/menu/api/getAllMenu/${currentRestaurantId}/`, { headers }),
+            ]);
+
+            const availableCategories = catResp.data.filter(c => c.avalaible);
             setCategories(availableCategories);
+            setMenus(menuResp.data);
+
             await AsyncStorage.setItem(GROUP_MENU_KEY, JSON.stringify(availableCategories));
+            await AsyncStorage.setItem(MENU_KEY, JSON.stringify(menuResp.data));
 
-            // Récupération des menus
-            const menusResponse = await axios.get(
-                `${getPosUrl()}/menu/api/getAllMenu/${currentRestaurantId}/`, 
-                { headers }
-            );
-            setMenus(menusResponse.data);
-            await AsyncStorage.setItem(MENU_KEY, JSON.stringify(menusResponse.data));
-
-            console.log('[SYNC] ✅ Données rechargées et mises en cache');
-
+            console.log('[SYNC] ✅ Données rechargées');
         } catch (error) {
-            console.error('[SYNC ERROR] Échec du rechargement:', error.message);
-            Alert.alert("Erreur de Synchro", "Échec du rechargement des données.");
+            console.error('[SYNC] Échec rechargement:', error.message);
         } finally {
             setIsLoading(false);
         }
@@ -61,11 +76,9 @@ export function useBorneSync() {
     // --- 2. CHARGEMENT INITIAL DEPUIS LE CACHE ---
     const loadDataFromCache = useCallback(async () => {
         setIsLoading(true);
-        
-        const currentRestaurantId = idRestaurant;
-        if (currentRestaurantId) {
-            setRestaurantId(currentRestaurantId);
-        }
+
+        const currentRestaurantId = getRestaurantId();
+        if (currentRestaurantId) setRestaurantId(currentRestaurantId);
 
         const cachedCategories = await AsyncStorage.getItem(GROUP_MENU_KEY);
         const cachedMenus = await AsyncStorage.getItem(MENU_KEY);
@@ -75,117 +88,56 @@ export function useBorneSync() {
             setMenus(JSON.parse(cachedMenus));
             console.log('[CACHE] ✅ Données chargées depuis le cache');
         }
-        
-        // Toujours synchroniser après pour avoir les données fraîches
-        await fetchAndCacheAllData(); 
+
+        await fetchAndCacheAllData();
     }, [fetchAndCacheAllData]);
-    
-    // --- 3. WEBSOCKET ---
-    const connectWebSocket = useCallback(() => {
-        if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-            console.log('[WS] Déjà connecté');
-            return;
+
+    // --- 3. GESTION DES ÉTAPES ---
+    const getStepsForMenu = useCallback(async (menuId, mode = null) => {
+        const STEPS_KEY = `@steps_menu_${menuId}_${mode || 'all'}`;
+        const isCacheInvalid = await AsyncStorage.getItem(STEPS_INVALIDATION_FLAG);
+
+        if (isCacheInvalid !== 'true') {
+            const cached = await AsyncStorage.getItem(STEPS_KEY);
+            if (cached) {
+                console.log(`[STEPS] Cache pour menu ${menuId}`);
+                return JSON.parse(cached);
+            }
         }
 
-        console.log('[WS] Connexion...');
-        const socket = new WebSocket(`${getPosUrl().replace(/^http/, 'ws')}/ws/borne/sync/`);
-        ws.current = socket;
-    
-        socket.onopen = () => {
-            console.log('[WS] ✅ Connecté au serveur');
-        };
-
-        socket.onmessage = (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                console.log('[WS] 📥 Message reçu:', data.type);
-                
-                // Si le serveur demande un rechargement
-                if (data.type === 'sync_message' && data.data.status === 'full_sync_required') {
-                    console.log('[WS] 🔄 Rechargement demandé par le serveur');
-                    fetchAndCacheAllData();
-                }
-            } catch (error) {
-                console.error('[WS] Erreur traitement message:', error);
-            }
-        };
-    
-        socket.onclose = (e) => {
-            console.log('[WS] ❌ Connexion fermée. Reconnexion dans 5s...');
-            setTimeout(connectWebSocket, 5000);
-        };
-    
-        socket.onerror = (error) => {
-            console.error('[WS] ❌ Erreur:', error.message);
-            socket.close();
-        };
-    }, [fetchAndCacheAllData]);
-    
-    // --- 4. GESTION DES ÉTAPES ---
-    const getStepsForMenu = useCallback(async (menuId) => {
-        const STEPS_KEY = `@steps_menu_${menuId}`;
-        const accessToken = await AsyncStorage.getItem("token");
-
+        const accessToken = await getOrRefreshToken();
         if (!accessToken) return [];
 
-        const headers = { Authorization: `Bearer ${accessToken}` };
-        const isCacheInvalid = await AsyncStorage.getItem(STEPS_INVALIDATION_FLAG);
-        
-        let cachedSteps = null;
-        if (isCacheInvalid !== 'true') {
-            cachedSteps = await AsyncStorage.getItem(STEPS_KEY);
-            if (cachedSteps) {
-                console.log(`[STEPS] Chargées depuis le cache pour menu ${menuId}`);
-                return JSON.parse(cachedSteps);
-            }
-        }
-        
         try {
-            console.log(`[STEPS] Récupération API pour menu ${menuId}`);
-            const response = await axios.get(`${getPosUrl()}/menu/api/stepListByMenu/${menuId}/`, { headers });
-            
+            const url = `${getPosUrl()}/menu/api/stepListByMenu/${menuId}/${mode ? `?mode=${mode}` : ''}`;
+            const response = await axios.get(url, { headers: { Authorization: `Bearer ${accessToken}` } });
             await AsyncStorage.setItem(STEPS_KEY, JSON.stringify(response.data));
-            if (isCacheInvalid === 'true') {
-                await AsyncStorage.removeItem(STEPS_INVALIDATION_FLAG);
-            }
-
+            if (isCacheInvalid === 'true') await AsyncStorage.removeItem(STEPS_INVALIDATION_FLAG);
             return response.data;
-            
         } catch (error) {
-            console.error(`[STEPS] Erreur pour menu ${menuId}:`, error);
+            console.error(`[STEPS] Erreur menu ${menuId}:`, error);
             return [];
         }
     }, []);
 
-    // --- 5. DÉMARRAGE ---
+    // --- 4. DÉMARRAGE ---
     useEffect(() => {
         loadDataFromCache();
-        connectWebSocket();
 
-        const subscription = AppState.addEventListener('change', nextAppState => {
-            if (nextAppState === 'active') {
-                console.log('[APP] Retour au premier plan');
-                if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-                    console.log('[APP] Reconnexion WebSocket...');
-                    connectWebSocket();
-                }
-            }
-        });
+        // S'enregistrer auprès de BorneSyncProvider pour recevoir les demandes de sync
+        addMenuRefreshListener(fetchAndCacheAllData);
 
         return () => {
-            subscription.remove();
-            if (ws.current) {
-                ws.current.close();
-            }
+            removeMenuRefreshListener(fetchAndCacheAllData);
         };
-    }, [loadDataFromCache, connectWebSocket]);
+    }, [loadDataFromCache, fetchAndCacheAllData]);
 
-    return { 
-        categories, 
-        menus, 
-        isLoading, 
-        fetchAndCacheAllData, 
-        getStepsForMenu, 
+    return {
+        categories,
+        menus,
+        isLoading,
+        fetchAndCacheAllData,
+        getStepsForMenu,
         restaurantId,
     };
 }

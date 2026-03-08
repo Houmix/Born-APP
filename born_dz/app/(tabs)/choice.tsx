@@ -3,15 +3,15 @@ import { useRouter } from "expo-router";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons, MaterialIcons, Feather } from '@expo/vector-icons';
-import { idRestaurant } from "@/config";
-import { getPosUrl } from "@/utils/serverConfig";
+import { getPosUrl, getRestaurantId } from "@/utils/serverConfig";
 import { useEffect } from "react";
+import { useKioskTheme } from "@/contexts/KioskThemeContext";
 
-// Assurez-vous que votre logo est bien à cet emplacement
 const LOGO_SOURCE = require('@/assets/logo.png');
 
 export default function IndexScreen() {
   const router = useRouter();
+  const theme = useKioskTheme();
 
   // Fonction pour récupérer le token anonyme et configurer le restaurant
   const getToken = async () => {
@@ -23,14 +23,14 @@ export default function IndexScreen() {
         
         // ✅ Stocker le token ET le restaurant
         await AsyncStorage.setItem("token", response.data.access);
-        await AsyncStorage.setItem("Employee_restaurant_id", idRestaurant.toString());
+        await AsyncStorage.setItem("Employee_restaurant_id", getRestaurantId().toString());
         await AsyncStorage.setItem("Employee_id", "0");  // Anonyme
         await AsyncStorage.removeItem("lastOrderId"); 
                 await AsyncStorage.removeItem("orderList"); // Vide les articles
                 await AsyncStorage.removeItem("pendingOrder"); // Vide la commande en cours
         console.log(`✅ Configuration:`, {
           token: response.data.access,
-          restaurant: idRestaurant,
+          restaurant: getRestaurantId(),
           employee: 0
         });
       } else {
@@ -48,7 +48,7 @@ export default function IndexScreen() {
   }, []);
 
   return (
-    <View style={styles.main}>
+    <View style={[styles.main, { backgroundColor: theme.backgroundColor }]}>
       
       {/* Header avec Logo */}
       <View style={styles.header}>
@@ -64,15 +64,14 @@ export default function IndexScreen() {
 
         <View style={styles.cardsContainer}>
             
-            {/* 🔹 CARTE 1 : S'IDENTIFIER (Bleu Royal) */}
-            <TouchableOpacity 
-              style={[styles.card, styles.cardBlue]} 
+            {/* 🔹 CARTE 1 : S'IDENTIFIER */}
+            <TouchableOpacity
+              style={[styles.card, { backgroundColor: theme.primaryColor }]}
               activeOpacity={0.8}
               onPress={() => router.push("/(tabs)/identification")}
             >
               <View style={styles.iconCircle}>
-                {/* Icône Feather souvent plus propre, mais MaterialIcons fonctionne très bien aussi */}
-                <MaterialIcons name="perm-identity" size={60} color="#0056b3" />
+                <MaterialIcons name="perm-identity" size={60} color={theme.primaryColor} />
               </View>
               <Text style={styles.cardTitle}>S'identifier</Text>
               <Text style={styles.cardDescription}>
@@ -80,14 +79,14 @@ export default function IndexScreen() {
               </Text>
             </TouchableOpacity>
 
-            {/* 🔸 CARTE 2 : COMMANDER (Rose Vif - Action Principale) */}
-            <TouchableOpacity 
-              style={[styles.card, styles.cardPink]} 
+            {/* 🔸 CARTE 2 : COMMANDER */}
+            <TouchableOpacity
+              style={[styles.card, { backgroundColor: theme.secondaryColor }]}
               activeOpacity={0.8}
               onPress={() => router.push("/(tabs)/terminal")}
             >
               <View style={styles.iconCircle}>
-                <Ionicons name="fast-food" size={60} color="#ff69b4" />
+                <Ionicons name="fast-food" size={60} color={theme.secondaryColor} />
               </View>
               <Text style={styles.cardTitle}>Commander</Text>
               <Text style={styles.cardDescription}>
@@ -108,7 +107,6 @@ const isTablet = width > 600;
 const styles = StyleSheet.create({
     main: {
         flex: 1,
-        backgroundColor: "#F8F9FA", // Fond blanc cassé "Premium"
     },
     header: {
         height: "15%",
@@ -162,13 +160,6 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.15,
         shadowRadius: 15,
-    },
-    // Couleurs spécifiques
-    cardBlue: {
-        backgroundColor: "#0056b3", // Bleu Royal
-    },
-    cardPink: {
-        backgroundColor: "#ff69b4", // Rose Vif
     },
     // Cercles blancs pour les icônes
     iconCircle: {

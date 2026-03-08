@@ -6,11 +6,11 @@ import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { getPosUrl } from "@/utils/serverConfig";
 import { useBorneSync } from '@/hooks/useBorneSync';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useKioskTheme } from '@/contexts/KioskThemeContext';
 
 const { width } = Dimensions.get('window');
 
 const COLORS = {
-  primary: "#ff69b4",
   success: "#28a745",
   bg: "#F8F9FA",
   text: "#1A1A1A",
@@ -18,7 +18,9 @@ const COLORS = {
 };
 
 export default function MenuStepsScreen() {
-    const { menuId, menuName, price } = useLocalSearchParams(); 
+    const { menuId, menuName, price, isSolo } = useLocalSearchParams();
+    const theme = useKioskTheme();
+    const mode = isSolo === 'true' ? 'solo' : 'full';
     const [steps, setSteps] = useState([]);
     const [selectedOptions, setSelectedOptions] = useState({});
     const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -32,7 +34,7 @@ export default function MenuStepsScreen() {
         const loadSteps = async () => {
             setIsLoading(true);
             try {
-                const data = await getStepsForMenu(menuId);
+                const data = await getStepsForMenu(menuId, mode);
                 setSteps(data);
             } catch (error) {
                 console.error(error);
@@ -87,6 +89,7 @@ export default function MenuStepsScreen() {
           menuId,
           price: totalPrice,
           quantity: 1,
+          solo: isSolo === 'true',
           steps: steps.map(step => ({
               stepId: step.id,
               stepName: step.name,
@@ -106,7 +109,7 @@ export default function MenuStepsScreen() {
 
     if (isLoading) return (
         <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ActivityIndicator size="large" color={theme.primaryColor} />
             <Text style={styles.loadingText}>{t('step.preparation')}</Text>
         </View>
     );
@@ -119,7 +122,7 @@ export default function MenuStepsScreen() {
     };
 
     return (
-        <SafeAreaView style={[styles.container, isRTL && { direction: 'rtl' }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: theme.backgroundColor }, isRTL && { direction: 'rtl' }]}>
             {/* Header avec progression */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.push("/terminal")} style={styles.homeButton}>
@@ -139,7 +142,7 @@ export default function MenuStepsScreen() {
             {/* Barre de progression visuelle */}
             <View style={styles.progressContainer}>
                 {steps.map((_, i) => (
-                    <View key={i} style={[styles.progressBar, i <= currentStepIndex ? styles.progressActive : styles.progressInactive]} />
+                    <View key={i} style={[styles.progressBar, i <= currentStepIndex ? { backgroundColor: theme.primaryColor } : styles.progressInactive]} />
                 ))}
             </View>
 
@@ -160,12 +163,12 @@ export default function MenuStepsScreen() {
                     return (
                         <TouchableOpacity
                             activeOpacity={0.8}
-                            style={[styles.optionCard, isSelected && styles.optionCardSelected]}
+                            style={[styles.optionCard, { backgroundColor: theme.cardBgColor }, isSelected && [styles.optionCardSelected, { borderColor: theme.primaryColor }]]}
                             onPress={() => toggleOption(currentStep.id, item.id, currentStep.max_options === 1, currentStep.max_options)}
                         >
                             {isSelected && (
                                 <View style={styles.checkBadge}>
-                                    <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+                                    <Ionicons name="checkmark-circle" size={24} color={theme.primaryColor} />
                                 </View>
                             )}
                             <Image
@@ -173,9 +176,9 @@ export default function MenuStepsScreen() {
                                 style={styles.optionImage}
                                 resizeMode="contain"
                             />
-                            <Text style={styles.optionName}>{item.option.name}</Text>
+                            <Text style={[styles.optionName, { color: theme.textColor }]}>{item.option.name}</Text>
                             {item.option.extra_price > 0 && (
-                                <Text style={styles.optionExtra}>+{item.option.extra_price} DA</Text>
+                                <Text style={[styles.optionExtra, { color: theme.primaryColor }]}>+{item.option.extra_price} DA</Text>
                             )}
                         </TouchableOpacity>
                     );
@@ -196,7 +199,7 @@ export default function MenuStepsScreen() {
                     <TouchableOpacity
                         onPress={handleNext}
                         disabled={(selectedOptions[currentStep.id]?.length || 0) === 0}
-                        style={[styles.navButton, styles.nextButton, (selectedOptions[currentStep.id]?.length || 0) === 0 && styles.disabledButton]}
+                        style={[styles.navButton, { flex: 2, backgroundColor: theme.primaryColor }, (selectedOptions[currentStep.id]?.length || 0) === 0 && styles.disabledButton]}
                     >
                         <Text style={styles.nextButtonText}>{t('next')}</Text>
                         <AntDesign name={isRTL ? "arrowleft" : "arrowright"} size={20} color="white" />
@@ -230,7 +233,7 @@ const styles = StyleSheet.create({
 
     progressContainer: { flexDirection: 'row', paddingHorizontal: 20, gap: 8, marginBottom: 10 },
     progressBar: { flex: 1, height: 6, borderRadius: 3 },
-    progressActive: { backgroundColor: COLORS.primary },
+    progressActive: { backgroundColor: '#888' }, // sera surchargé inline
     progressInactive: { backgroundColor: '#E2E8F0' },
 
     stepTitleContainer: { paddingHorizontal: 20, marginVertical: 15 },
@@ -248,11 +251,11 @@ const styles = StyleSheet.create({
         elevation: 3, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10,
         borderWidth: 2, borderColor: 'transparent'
     },
-    optionCardSelected: { borderColor: COLORS.primary, backgroundColor: '#FFF9F5' },
+    optionCardSelected: { backgroundColor: '#FFF9F5' },
     checkBadge: { position: 'absolute', top: 10, right: 10, zIndex: 1 },
     optionImage: { width: '80%', height: 100, marginBottom: 10 },
-    optionName: { fontSize: 16, fontWeight: '700', textAlign: 'center', color: COLORS.text },
-    optionExtra: { fontSize: 14, color: COLORS.primary, fontWeight: '600', marginTop: 5 },
+    optionName: { fontSize: 16, fontWeight: '700', textAlign: 'center', color: COLORS.text }, // sera surchargé inline si besoin
+    optionExtra: { fontSize: 14, fontWeight: '600', marginTop: 5 },
 
     footer: {
         flexDirection: 'row', 
@@ -264,7 +267,7 @@ const styles = StyleSheet.create({
     },
     navButton: { height: 70, borderRadius: 18, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 10 },
     backButton: { flex: 1, backgroundColor: '#F1F5F9' },
-    nextButton: { flex: 2, backgroundColor: COLORS.primary },
+    nextButton: { flex: 2 },
     confirmButton: { flex: 2, backgroundColor: COLORS.success },
     disabledButton: { backgroundColor: '#CBD5E1' },
     backButtonText: { fontSize: 20, fontWeight: '700', color: COLORS.text },

@@ -4,14 +4,15 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import { idRestaurant} from "@/config";
-import { getPosUrl } from "@/utils/serverConfig";
+import { getPosUrl, getRestaurantId } from "@/utils/serverConfig";
 import { useEffect, useState } from "react";
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useKioskTheme } from '@/contexts/KioskThemeContext';
 
 export default function PaymentScreen() {
     const router = useRouter();
     const { t, isRTL } = useLanguage();
+    const theme = useKioskTheme();
     const [order, setOrder] = useState([]);
     const [errorMessage, setErrorMessage] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
@@ -41,7 +42,7 @@ export default function PaymentScreen() {
         setIsProcessing(true);
         try {
             const Employee_id = await AsyncStorage.getItem("Employee_id");
-            const restaurantId = idRestaurant;
+            const restaurantId = getRestaurantId();
             const takeawayValue = await AsyncStorage.getItem("orderTakeaway");
             const isTakeaway = takeawayValue === "true";
 
@@ -87,28 +88,28 @@ export default function PaymentScreen() {
     const cash = () => processPayment(0);
 
     return (
-        <View style={[styles.main, isRTL && { direction: 'rtl' }]}>
+        <View style={[styles.main, { backgroundColor: theme.backgroundColor }, isRTL && { direction: 'rtl' }]}>
             <View style={styles.titleBox}>
-                <Text style={styles.title}>{t('payment.title')}</Text>
+                <Text style={[styles.title, { color: theme.primaryColor }]}>{t('payment.title')}</Text>
             </View>
 
             <View style={styles.container}>
-                <TouchableOpacity 
-                    style={[styles.box, isProcessing && styles.boxDisabled]} 
+                <TouchableOpacity
+                    style={[styles.box, { backgroundColor: theme.cardBgColor }, isProcessing && styles.boxDisabled]}
                     onPress={cash}
                     disabled={isProcessing}
                 >
-                    <Text style={styles.text}>{t('payment.cash')}</Text>
-                    <Ionicons name="cash-outline" size={250} color={isProcessing ? "#ccc" : "black"} />
+                    <Text style={[styles.text, { color: theme.textColor }]}>{t('payment.cash')}</Text>
+                    <Ionicons name="cash-outline" size={250} color={isProcessing ? "#ccc" : theme.textColor} />
                 </TouchableOpacity>
 
-                <TouchableOpacity 
-                    style={[styles.box, isProcessing && styles.boxDisabled]} 
+                <TouchableOpacity
+                    style={[styles.box, { backgroundColor: theme.cardBgColor }, isProcessing && styles.boxDisabled]}
                     onPress={card}
                     disabled={isProcessing}
                 >
-                    <Text style={styles.text}>{t('payment.card')}</Text>
-                    <AntDesign name="creditcard" size={250} color={isProcessing ? "#ccc" : "black"} />
+                    <Text style={[styles.text, { color: theme.textColor }]}>{t('payment.card')}</Text>
+                    <AntDesign name="creditcard" size={250} color={isProcessing ? "#ccc" : theme.textColor} />
                 </TouchableOpacity>
             </View>
 
@@ -176,7 +177,6 @@ const styles = StyleSheet.create({
         opacity: 0.5,
     },
     title: {
-        color: "#0056b3",
         fontSize: 38,
         fontWeight: "bold",
         textAlign: "center",
