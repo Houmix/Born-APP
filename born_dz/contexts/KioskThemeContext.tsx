@@ -20,6 +20,7 @@ export interface KioskTheme {
     categoryTextColor: string;
     logoUrl: string | null;
     screensaverVideoUrl: string | null;
+    cardStyle: 'gradient' | 'macdo' | 'magazine';
 }
 
 const DEFAULT_THEME: KioskTheme = {
@@ -34,6 +35,7 @@ const DEFAULT_THEME: KioskTheme = {
     categoryTextColor: '#94a3b8',
     logoUrl: null,
     screensaverVideoUrl: null,
+    cardStyle: 'gradient',
 };
 
 const THEME_CACHE_KEY = 'kiosk_theme_cache';
@@ -76,10 +78,11 @@ export function KioskThemeProvider({ children }: { children: React.ReactNode }) 
                 categoryTextColor:         data.category_text_color         || DEFAULT_THEME.categoryTextColor,
                 logoUrl:            data.logo_url            || null,
                 screensaverVideoUrl:data.screensaver_video_url || null,
+                cardStyle:          (data.card_style as 'gradient' | 'macdo' | 'magazine') || 'gradient',
             };
             setTheme(newTheme);
             await AsyncStorage.setItem(cacheKey, JSON.stringify(newTheme));
-            console.log('[KioskTheme] ✅ Thème rechargé :', newTheme.primaryColor, newTheme.secondaryColor);
+            console.log('[KioskTheme] ✅ Thème rechargé :', newTheme.primaryColor, newTheme.cardStyle);
         } catch (err: any) {
             console.warn('[KioskTheme] Erreur fetch :', err?.message || err);
         }

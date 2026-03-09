@@ -201,6 +201,18 @@ export default function MenuScreen() {
       } catch (error) {
         console.error('Erreur ajout extra:', error);
       }
+    } else if (item.offer_menu_choice === false) {
+      // Pas de choix solo/menu : aller directement aux étapes
+      resetMainTimer();
+      router.push({
+        pathname: "/step",
+        params: {
+          menuId: item.id,
+          menuName: item.name,
+          price: item.solo_price || item.price || 0,
+          isSolo: 'false',
+        },
+      });
     } else {
       handleOpenModal(item);
     }
@@ -326,6 +338,89 @@ export default function MenuScreen() {
       categories.some((category) => category.id === item.group_menu && category.avalaible)
   );
 
+  const getDisplayPrice = (item) => {
+    if (item.extra == 1) return `+${item.solo_price}`;
+    if (item.price && parseFloat(item.price) > 0) return `${item.price}`;
+    return `${item.solo_price}`;
+  };
+
+  const renderMenuCard = (item) => {
+    const imageSource = item.photo
+      ? { uri: `${getPosUrl()}${item.photo}` }
+      : require('@/assets/logo.png');
+    const displayPrice = getDisplayPrice(item);
+    const style = theme.cardStyle || 'gradient';
+
+    if (style === 'macdo') {
+      return (
+        <TouchableOpacity
+          key={item.id}
+          style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2, backgroundColor: theme.cardBgColor }]}
+          onPress={() => handleAddToCart(item)}
+          activeOpacity={0.85}
+        >
+          <View style={{ flex: 6, overflow: 'hidden' }}>
+            <Image source={imageSource} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+          </View>
+          <View style={{ flex: 4, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 10, justifyContent: 'space-between', backgroundColor: theme.cardBgColor }}>
+            <Text style={{ color: theme.textColor, fontWeight: '700', fontSize: 13, lineHeight: 18 }} numberOfLines={2}>{item.name}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ color: theme.secondaryColor, fontSize: 16, fontWeight: '900' }}>{displayPrice} DA</Text>
+              <View style={[styles.addButton, { backgroundColor: theme.secondaryColor }]}>
+                <Feather name="plus" size={18} color="white" />
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+      );
+    }
+
+    if (style === 'magazine') {
+      return (
+        <TouchableOpacity
+          key={item.id}
+          style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2 }]}
+          onPress={() => handleAddToCart(item)}
+          activeOpacity={0.85}
+        >
+          <Image source={imageSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <View style={{ position: 'absolute', top: 12, left: 10, right: 10, backgroundColor: 'rgba(15,23,42,0.6)', borderRadius: 100, paddingVertical: 7, paddingHorizontal: 12 }}>
+            <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }} numberOfLines={1}>{item.name}</Text>
+          </View>
+          <View style={{ position: 'absolute', bottom: 12, left: 10, right: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <View style={{ backgroundColor: theme.secondaryColor, borderRadius: 100, paddingVertical: 7, paddingHorizontal: 14 }}>
+              <Text style={{ color: 'white', fontWeight: '900', fontSize: 15 }}>{displayPrice} DA</Text>
+            </View>
+            <View style={{ backgroundColor: 'white', width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }}>
+              <Feather name="plus" size={20} color={theme.primaryColor} />
+            </View>
+          </View>
+        </TouchableOpacity>
+      );
+    }
+
+    // gradient (défaut)
+    return (
+      <TouchableOpacity
+        key={item.id}
+        style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2 }]}
+        onPress={() => handleAddToCart(item)}
+        activeOpacity={0.85}
+      >
+        <Image source={imageSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.82)']} style={styles.menuOverlay}>
+          <Text style={styles.menuText} numberOfLines={2}>{item.name}</Text>
+          <View style={styles.priceActionContainer}>
+            <Text style={[styles.menuPrice, { color: theme.secondaryColor }]}>{displayPrice} DA</Text>
+            <View style={[styles.addButton, { backgroundColor: theme.secondaryColor }]}>
+              <Feather name="plus" size={20} color="white" />
+            </View>
+          </View>
+        </LinearGradient>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundColor }, isRTL && { direction: 'rtl' }]} {...panResponder.panHandlers}>
 
@@ -400,38 +495,7 @@ export default function MenuScreen() {
               numColumns={numColumns}
               key={numColumns}
               keyExtractor={(item) => item.id.toString()}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2 }]}
-                  onPress={() => handleAddToCart(item)}
-                  activeOpacity={0.85}
-                >
-                  <Image
-                    source={item.photo ? { uri: `${getPosUrl()}${item.photo}` } : require('@/assets/logo.png')}
-                    style={StyleSheet.absoluteFill}
-                    resizeMode="cover"
-                  />
-                  <LinearGradient
-                    colors={['transparent', 'rgba(0,0,0,0.82)']}
-                    style={styles.menuOverlay}
-                  >
-                    <Text style={styles.menuText} numberOfLines={2}>{item.name}</Text>
-                    <View style={styles.priceActionContainer}>
-                      <Text style={[styles.menuPrice, { color: theme.secondaryColor }]}>
-                        {item.extra == 1
-                          ? `+${item.solo_price}`
-                          : (item.price && parseFloat(item.price) > 0)
-                            ? `${item.price}`
-                            : `${item.solo_price}`
-                        } DA
-                      </Text>
-                      <View style={[styles.addButton, { backgroundColor: theme.secondaryColor }]}>
-                        <Feather name="plus" size={20} color="white" />
-                      </View>
-                    </View>
-                  </LinearGradient>
-                </TouchableOpacity>
-              )}
+              renderItem={({ item }) => renderMenuCard(item)}
               contentContainerStyle={styles.menuGrid}
             />
           )}
