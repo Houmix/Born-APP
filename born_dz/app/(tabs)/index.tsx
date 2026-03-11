@@ -19,7 +19,7 @@ export default function WelcomeScreen() {
       onPress={handleScreenTouch}
       activeOpacity={1}
     >
-      {/* Vidéo screensaver si configurée, sinon image statique */}
+      {/* Vidéo > Image/GIF > image par défaut */}
       {theme.screensaverVideoUrl ? (
         <Video
           ref={videoRef}
@@ -30,10 +30,10 @@ export default function WelcomeScreen() {
           shouldPlay
           isMuted
         />
-      ) : theme.logoUrl ? (
+      ) : theme.screensaverImageUrl ? (
         <Image
           style={styles.background}
-          source={{ uri: theme.logoUrl }}
+          source={{ uri: theme.screensaverImageUrl }}
           resizeMode="cover"
         />
       ) : (

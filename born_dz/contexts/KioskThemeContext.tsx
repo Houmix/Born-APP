@@ -19,6 +19,7 @@ export interface KioskTheme {
     selectedCategoryBgColor: string;
     categoryTextColor: string;
     logoUrl: string | null;
+    screensaverImageUrl: string | null;
     screensaverVideoUrl: string | null;
     cardStyle: 'gradient' | 'macdo' | 'magazine';
 }
@@ -34,6 +35,7 @@ const DEFAULT_THEME: KioskTheme = {
     selectedCategoryBgColor: '#334155',
     categoryTextColor: '#94a3b8',
     logoUrl: null,
+    screensaverImageUrl: null,
     screensaverVideoUrl: null,
     cardStyle: 'gradient',
 };
@@ -76,8 +78,9 @@ export function KioskThemeProvider({ children }: { children: React.ReactNode }) 
                 categoryBgColor:           data.category_bg_color           || DEFAULT_THEME.categoryBgColor,
                 selectedCategoryBgColor:   data.selected_category_bg_color  || DEFAULT_THEME.selectedCategoryBgColor,
                 categoryTextColor:         data.category_text_color         || DEFAULT_THEME.categoryTextColor,
-                logoUrl:            data.logo_url            || null,
-                screensaverVideoUrl:data.screensaver_video_url || null,
+                logoUrl:             data.logo_url              || null,
+                screensaverImageUrl: data.screensaver_image_url || null,
+                screensaverVideoUrl: data.screensaver_video_url || null,
                 cardStyle:          (data.card_style as 'gradient' | 'macdo' | 'magazine') || 'gradient',
             };
             setTheme(newTheme);
