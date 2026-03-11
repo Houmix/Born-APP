@@ -10,7 +10,7 @@
   },
   "build": {
     "appId": "com.doeat.borne",
-    "productName": "MenuGo Borne",
+    "productName": "ClickGo Borne",
     "asar": true,
     "win": {
       "target": "nsis",

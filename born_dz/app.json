@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "born_dz",
+    "name": "ClickGo Borne",
     "slug": "born_dz",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,7 +16,7 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.anonymous.born_dz"
+      "package": "com.clickgo.borne"
     },
     "web": {
       "bundler": "metro",
