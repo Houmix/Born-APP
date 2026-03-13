@@ -45,12 +45,16 @@ export default function PaymentScreen() {
             const restaurantId = getRestaurantId();
             const takeawayValue = await AsyncStorage.getItem("orderTakeaway");
             const isTakeaway = takeawayValue === "true";
+            const deliveryType = await AsyncStorage.getItem("orderDeliveryType") || 'sur_place';
+            const customerIdentifier = await AsyncStorage.getItem("orderCustomerIdentifier") || '';
 
             const dataToSend = {
                 user: Employee_id,
                 items: order,
                 restaurant: parseInt(restaurantId || "0", 10),
                 takeaway: isTakeaway,
+                delivery_type: deliveryType,
+                customer_identifier: customerIdentifier,
             };
             
             console.log("Données à envoyer :", dataToSend);
@@ -68,7 +72,7 @@ export default function PaymentScreen() {
             );
 
             if (response.status === 200 || response.status === 201) {
-                await AsyncStorage.multiRemove(["pendingOrder", "orderTakeaway"]);
+                await AsyncStorage.multiRemove(["pendingOrder", "orderTakeaway", "orderDeliveryType", "orderCustomerIdentifier"]);
                 await AsyncStorage.setItem("lastOrderId", response.data.order_id.toString());
                 router.push("/confirmation");
             } else {

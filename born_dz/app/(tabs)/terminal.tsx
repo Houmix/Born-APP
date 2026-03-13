@@ -11,7 +11,7 @@ import {
   Modal,
   PanResponder,
 } from "react-native";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from 'expo-linear-gradient';
@@ -137,82 +137,153 @@ export default function MenuScreen() {
     }
   }, [categories]);
 
+  // ── Composition modal ──────────────────────────────────────────────
+  const [compVisible, setCompVisible] = useState(false);
+  const [compItem, setCompItem] = useState(null);
+  const [compIsSolo, setCompIsSolo] = useState(false);
+  const [compSteps, setCompSteps] = useState([]);
+  const [compLoading, setCompLoading] = useState(false);
+  const [compSelected, setCompSelected] = useState({});
+
+  const { getStepsForMenu } = useBorneSync();
+
+  const openCompositionModal = async (item, isSolo) => {
+    setCompItem(item);
+    setCompIsSolo(isSolo);
+    setCompSelected({});
+    setCompSteps([]);
+    setCompVisible(true);
+    setCompLoading(true);
+    resetMainTimer();
+    try {
+      const data = await getStepsForMenu(item.id, isSolo ? 'solo' : 'full');
+      setCompSteps(data || []);
+    } catch { setCompSteps([]); }
+    finally { setCompLoading(false); }
+  };
+
+  const compToggleOption = (stepId, optionId, maxOptions) => {
+    setCompSelected(prev => {
+      const current = prev[stepId] || [];
+      if (maxOptions === 1) return { ...prev, [stepId]: [optionId] };
+      if (current.includes(optionId)) return { ...prev, [stepId]: current.filter(id => id !== optionId) };
+      if (maxOptions && current.length >= maxOptions) return prev;
+      return { ...prev, [stepId]: [...current, optionId] };
+    });
+  };
+
+  const compBasePrice = parseFloat(
+    compIsSolo ? (compItem?.solo_price || compItem?.price || 0) : (compItem?.price || 0)
+  );
+
+  const compTotalPrice = useMemo(() => {
+    let extras = 0;
+    compSteps.forEach(step => {
+      const sel = compSelected[step.id] || [];
+      step.stepoptions?.forEach(opt => {
+        if (sel.includes(opt.id)) extras += parseFloat(opt.option?.extra_price || 0);
+      });
+    });
+    return compBasePrice + extras;
+  }, [compSelected, compSteps, compBasePrice]);
+
+  const compIsComplete = compSteps.length === 0 || compSteps.every(s => (compSelected[s.id]?.length || 0) > 0);
+  const compDoneCount = compSteps.filter(s => (compSelected[s.id]?.length || 0) > 0).length;
+
+  const addOrderToCart = async (newOrder) => {
+    const existing = JSON.parse(await AsyncStorage.getItem("orderList") || "[]");
+    const areOptionsEqual = (s1, s2) => {
+      if (!s1 && !s2) return true;
+      if (!s1 || !s2 || s1.length !== s2.length) return false;
+      for (const step1 of s1) {
+        const step2 = s2.find(s => s.stepId === step1.stepId);
+        if (!step2) return false;
+        const o1 = step1.selectedOptions.map(o => o.optionId).sort();
+        const o2 = step2.selectedOptions.map(o => o.optionId).sort();
+        if (o1.length !== o2.length || !o1.every((v, i) => v === o2[i])) return false;
+      }
+      return true;
+    };
+    const idx = existing.findIndex(item =>
+      item.menuId === newOrder.menuId && item.solo === newOrder.solo &&
+      item.extra === newOrder.extra && areOptionsEqual(item.steps, newOrder.steps)
+    );
+    if (idx >= 0) existing[idx].quantity += 1;
+    else existing.push(newOrder);
+    await AsyncStorage.setItem("orderList", JSON.stringify(existing));
+  };
+
+  const handleCompConfirm = async () => {
+    if (!compItem) return;
+    const order = {
+      menuName: compIsSolo ? `${compItem.name} (Solo)` : compItem.name,
+      menuId: compItem.id,
+      price: compTotalPrice,
+      quantity: 1,
+      solo: compIsSolo,
+      extra: false,
+      steps: compSteps.map(step => ({
+        stepId: step.id,
+        stepName: step.name,
+        selectedOptions: step.stepoptions
+          .filter(opt => compSelected[step.id]?.includes(opt.id))
+          .map(opt => ({
+            optionId: opt.id,
+            option: opt.id,
+            optionName: opt.option.name,
+            optionPrice: opt.option.extra_price,
+          })),
+      })),
+    };
+    await addOrderToCart(order);
+    setCompVisible(false);
+    await updateCartCount();
+    resetMainTimer();
+  };
+
   const handleOpenModal = (item) => {
     setSelectedItemForModal(item);
     setIsModalVisible(true);
   };
 
-  // Solo → naviguer vers step avec isSolo=true
   const handleSoloAdd = () => {
     if (!selectedItemForModal) return;
     const item = selectedItemForModal;
     setIsModalVisible(false);
-    resetMainTimer();
-    router.push({
-      pathname: "/step",
-      params: {
-        menuId: item.id,
-        menuName: item.name,
-        price: item.solo_price || item.price || 0,
-        isSolo: 'true',
-      },
-    });
+    if (theme.compositionMode === 'modal') {
+      openCompositionModal(item, true);
+    } else {
+      resetMainTimer();
+      router.push({ pathname: "/step", params: { menuId: item.id, menuName: item.name, price: item.solo_price || item.price || 0, isSolo: 'true' } });
+    }
   };
 
-  // Menu complet → naviguer vers step
   const handleMenuAdd = () => {
     if (!selectedItemForModal) return;
     const item = selectedItemForModal;
     setIsModalVisible(false);
-    resetMainTimer();
-    router.push({
-      pathname: "/step",
-      params: {
-        menuId: item.id,
-        menuName: item.name,
-        price: item.price || 0,
-        isSolo: 'false',
-      },
-    });
+    if (theme.compositionMode === 'modal') {
+      openCompositionModal(item, false);
+    } else {
+      resetMainTimer();
+      router.push({ pathname: "/step", params: { menuId: item.id, menuName: item.name, price: item.price || 0, isSolo: 'false' } });
+    }
   };
 
   const handleAddToCart = async (item) => {
     if (item.extra) {
       try {
         const existingOrders = JSON.parse(await AsyncStorage.getItem("orderList") || "[]");
-        const existingIndex = existingOrders.findIndex(
-          (order) => order.menuId === item.id && order.extra === true
-        );
-        if (existingIndex !== -1) {
-          existingOrders[existingIndex].quantity += 1;
-        } else {
-          existingOrders.push({
-            menuId: item.id,
-            menuName: item.name,
-            extra: true,
-            quantity: 1,
-            price: item.price || 0,
-            steps: [],
-          });
-        }
+        const existingIndex = existingOrders.findIndex(order => order.menuId === item.id && order.extra === true);
+        if (existingIndex !== -1) existingOrders[existingIndex].quantity += 1;
+        else existingOrders.push({ menuId: item.id, menuName: item.name, extra: true, quantity: 1, price: item.price || 0, steps: [] });
         await AsyncStorage.setItem("orderList", JSON.stringify(existingOrders));
         await updateCartCount();
         resetMainTimer();
-      } catch (error) {
-        console.error('Erreur ajout extra:', error);
-      }
+      } catch (error) { console.error('Erreur ajout extra:', error); }
     } else if (item.offer_menu_choice === false) {
-      // Pas de choix solo/menu : aller directement aux étapes
-      resetMainTimer();
-      router.push({
-        pathname: "/step",
-        params: {
-          menuId: item.id,
-          menuName: item.name,
-          price: item.solo_price || item.price || 0,
-          isSolo: 'false',
-        },
-      });
+      if (theme.compositionMode === 'modal') openCompositionModal(item, false);
+      else { resetMainTimer(); router.push({ pathname: "/step", params: { menuId: item.id, menuName: item.name, price: item.solo_price || item.price || 0, isSolo: 'false' } }); }
     } else {
       handleOpenModal(item);
     }
@@ -505,6 +576,98 @@ export default function MenuScreen() {
       <ChoiceModal />
       <InactivityModal />
 
+      {/* ── MODAL COMPOSITION ──────────────────────────────────────── */}
+      <Modal animationType="fade" transparent visible={compVisible} onRequestClose={() => setCompVisible(false)}>
+        <View style={compStyles.overlay}>
+          <View style={compStyles.card}>
+            <View style={[compStyles.header, { backgroundColor: theme.primaryColor }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={compStyles.headerTitle} numberOfLines={1}>
+                  {compIsSolo ? `${compItem?.name} (Solo)` : compItem?.name}
+                </Text>
+                <Text style={compStyles.headerSub}>{compDoneCount}/{compSteps.length} étape{compSteps.length > 1 ? 's' : ''} complète{compSteps.length > 1 ? 's' : ''}</Text>
+              </View>
+              <View style={compStyles.priceBadge}>
+                <Text style={[compStyles.priceText, { color: theme.primaryColor }]}>{compTotalPrice.toFixed(0)} DA</Text>
+              </View>
+              <TouchableOpacity onPress={() => setCompVisible(false)} style={compStyles.closeBtn}>
+                <Feather name="x" size={22} color="white" />
+              </TouchableOpacity>
+            </View>
+
+            {compSteps.length > 0 && (
+              <View style={compStyles.progressRow}>
+                {compSteps.map((s, i) => (
+                  <View key={i} style={[compStyles.progressSeg, { backgroundColor: (compSelected[s.id]?.length || 0) > 0 ? theme.primaryColor : '#E2E8F0' }]} />
+                ))}
+              </View>
+            )}
+
+            {compLoading ? (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={theme.primaryColor} />
+                <Text style={{ color: '#64748B', marginTop: 16, fontSize: 18 }}>Chargement des options...</Text>
+              </View>
+            ) : compSteps.length === 0 ? (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                <Text style={{ color: '#64748B', fontSize: 18 }}>Aucune option à configurer</Text>
+              </View>
+            ) : (
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, gap: 32 }} showsVerticalScrollIndicator={false}>
+                {compSteps.map((step) => {
+                  const isDone = (compSelected[step.id]?.length || 0) > 0;
+                  return (
+                    <View key={step.id}>
+                      <View style={compStyles.stepHeader}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={compStyles.stepName}>{step.name}</Text>
+                          <Text style={compStyles.stepHint}>{step.max_options === 1 ? 'Choisissez une option' : `Jusqu'à ${step.max_options} options`}</Text>
+                        </View>
+                        {isDone && <Feather name="check-circle" size={26} color="#22C55E" />}
+                      </View>
+                      <View style={compStyles.optionsGrid}>
+                        {step.stepoptions?.map((opt) => {
+                          const isSelected = compSelected[step.id]?.includes(opt.id);
+                          return (
+                            <TouchableOpacity
+                              key={opt.id}
+                              style={[compStyles.optCard, isSelected && { borderColor: theme.primaryColor, backgroundColor: theme.primaryColor + '15' }]}
+                              onPress={() => compToggleOption(step.id, opt.id, step.max_options)}
+                              activeOpacity={0.8}
+                            >
+                              {isSelected && <View style={compStyles.checkBadge}><Feather name="check-circle" size={22} color={theme.primaryColor} /></View>}
+                              {opt.option?.photo
+                                ? <Image source={{ uri: `${getPosUrl()}${opt.option.photo}` }} style={compStyles.optImage} resizeMode="contain" />
+                                : <View style={[compStyles.optImage, { backgroundColor: '#F1F5F9', borderRadius: 12, justifyContent: 'center', alignItems: 'center' }]}><Feather name="package" size={36} color="#94a3b8" /></View>
+                              }
+                              <Text style={[compStyles.optName, { color: theme.textColor }]} numberOfLines={2}>{opt.option?.name}</Text>
+                              {opt.option?.extra_price > 0 && <Text style={[compStyles.optExtra, { color: theme.secondaryColor }]}>+{opt.option.extra_price} DA</Text>}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            <View style={compStyles.footer}>
+              <TouchableOpacity
+                style={[compStyles.addBtn, { backgroundColor: compIsComplete ? '#22C55E' : '#CBD5E1' }]}
+                onPress={handleCompConfirm}
+                disabled={!compIsComplete}
+              >
+                <Feather name="shopping-cart" size={24} color="white" />
+                <Text style={compStyles.addBtnText}>
+                  {compIsComplete ? `Ajouter au panier — ${compTotalPrice.toFixed(0)} DA` : `Complétez toutes les étapes (${compDoneCount}/${compSteps.length})`}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -614,4 +777,29 @@ const modalStyles = StyleSheet.create({
   alertButtonCancel: { paddingVertical: 12, width: '100%', alignItems: 'center' },
   alertButtonTextWhite: { color: "white", fontSize: 18, fontWeight: "bold" },
   alertButtonTextRed: { color: "#ef4444", fontSize: 16, fontWeight: "bold" },
+});
+
+const compStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "center", alignItems: "center" },
+  card: { width: "85%", maxWidth: 900, height: "88%", backgroundColor: "white", borderRadius: 30, overflow: "hidden", flexDirection: "column", elevation: 20 },
+  header: { flexDirection: "row", alignItems: "center", gap: 16, paddingHorizontal: 28, paddingVertical: 20 },
+  headerTitle: { fontSize: 22, fontWeight: "800", color: "white" },
+  headerSub: { fontSize: 14, color: "rgba(255,255,255,0.8)", marginTop: 3 },
+  priceBadge: { backgroundColor: "white", borderRadius: 24, paddingHorizontal: 18, paddingVertical: 8 },
+  priceText: { fontWeight: "900", fontSize: 18 },
+  closeBtn: { padding: 8, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 12 },
+  progressRow: { flexDirection: "row", gap: 6, paddingHorizontal: 20, paddingVertical: 10, backgroundColor: "#F8FAFC" },
+  progressSeg: { flex: 1, height: 5, borderRadius: 3 },
+  stepHeader: { flexDirection: "row", alignItems: "center", marginBottom: 16 },
+  stepName: { fontSize: 20, fontWeight: "800", color: "#1e293b" },
+  stepHint: { fontSize: 14, color: "#64748B", marginTop: 3 },
+  optionsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
+  optCard: { width: "21%", minWidth: 130, borderRadius: 18, padding: 14, alignItems: "center", borderWidth: 2, borderColor: "#E2E8F0", backgroundColor: "white", elevation: 3 },
+  checkBadge: { position: "absolute", top: 8, right: 8 },
+  optImage: { width: 80, height: 80, marginBottom: 10 },
+  optName: { fontSize: 14, fontWeight: "700", textAlign: "center" },
+  optExtra: { fontSize: 13, fontWeight: "600", marginTop: 5 },
+  footer: { padding: 20, borderTopWidth: 1, borderTopColor: "#E2E8F0" },
+  addBtn: { height: 65, borderRadius: 20, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 12 },
+  addBtnText: { color: "white", fontWeight: "800", fontSize: 18 },
 });
