@@ -114,7 +114,7 @@ export async function scanNetwork(
     const subnets = ['192.168.1', '192.168.0', '10.0.0', '10.0.1', '192.168.100'];
     const priorityLastOctets = [1, 2, 100, 101, 50, 200, 254, 10, 20, 30, 40];
 
-    const allIps: string[] = [];
+    const allIps: string[] = ['127.0.0.1', 'localhost'];
 
     for (const subnet of subnets) {
         for (const last of priorityLastOctets) {
