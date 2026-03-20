@@ -20,6 +20,16 @@ export function getPosUrl(): string {
     return _currentUrl;
 }
 
+/**
+ * Construit une URI d'image valide, qu'elle soit absolue (http/https)
+ * ou relative (chemin local à préfixer avec l'URL du serveur POS).
+ */
+export function buildPhotoUri(photo: string | null | undefined): string | null {
+    if (!photo) return null;
+    if (photo.startsWith('http://') || photo.startsWith('https://')) return photo;
+    return `${getPosUrl()}${photo}`;
+}
+
 export function setPosUrlInMemory(url: string) {
     _currentUrl = url;
 }

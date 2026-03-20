@@ -15,7 +15,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from 'expo-linear-gradient';
-import { getPosUrl } from "@/utils/serverConfig";
+import { getPosUrl, buildPhotoUri } from "@/utils/serverConfig";
 import Feather from '@expo/vector-icons/Feather';
 import { useBorneSync } from "@/hooks/useBorneSync.js";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -417,7 +417,7 @@ export default function MenuScreen() {
 
   const renderMenuCard = (item) => {
     const imageSource = item.photo
-      ? { uri: `${getPosUrl()}${item.photo}` }
+      ? { uri: buildPhotoUri(item.photo)! }
       : require('@/assets/logo.png');
     const displayPrice = getDisplayPrice(item);
     const style = theme.cardStyle || 'gradient';
@@ -540,7 +540,7 @@ export default function MenuScreen() {
             >
               {category.photo && (
                 <Image
-                  source={{ uri: `${getPosUrl()}${category.photo}` }}
+                  source={{ uri: buildPhotoUri(category.photo)! }}
                   style={styles.categoryImage}
                 />
               )}
@@ -637,7 +637,7 @@ export default function MenuScreen() {
                             >
                               {isSelected && <View style={compStyles.checkBadge}><Feather name="check-circle" size={22} color={theme.primaryColor} /></View>}
                               {opt.option?.photo
-                                ? <Image source={{ uri: `${getPosUrl()}${opt.option.photo}` }} style={compStyles.optImage} resizeMode="contain" />
+                                ? <Image source={{ uri: buildPhotoUri(opt.option.photo)! }} style={compStyles.optImage} resizeMode="contain" />
                                 : <View style={[compStyles.optImage, { backgroundColor: '#F1F5F9', borderRadius: 12, justifyContent: 'center', alignItems: 'center' }]}><Feather name="package" size={36} color="#94a3b8" /></View>
                               }
                               <Text style={[compStyles.optName, { color: theme.textColor }]} numberOfLines={2}>{opt.option?.name}</Text>
