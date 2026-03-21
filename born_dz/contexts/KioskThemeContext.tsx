@@ -23,6 +23,8 @@ export interface KioskTheme {
     screensaverVideoUrl: string | null;
     cardStyle: 'gradient' | 'macdo' | 'magazine';
     compositionMode: 'modal' | 'page';
+    loyaltyEnabled: boolean;
+    loyaltyPointsRate: number;
 }
 
 const DEFAULT_THEME: KioskTheme = {
@@ -40,6 +42,8 @@ const DEFAULT_THEME: KioskTheme = {
     screensaverVideoUrl: null,
     cardStyle: 'gradient',
     compositionMode: 'page',
+    loyaltyEnabled: false,
+    loyaltyPointsRate: 10,
 };
 
 const THEME_CACHE_KEY = 'kiosk_theme_cache';
@@ -85,6 +89,8 @@ export function KioskThemeProvider({ children }: { children: React.ReactNode }) 
                 screensaverVideoUrl: data.screensaver_video_url || null,
                 cardStyle:          (data.card_style as 'gradient' | 'macdo' | 'magazine') || 'gradient',
                 compositionMode:    (data.composition_mode as 'modal' | 'page') || 'page',
+                loyaltyEnabled:     data.loyalty_enabled ?? false,
+                loyaltyPointsRate:  data.loyalty_points_rate ?? 10,
             };
             setTheme(newTheme);
             await AsyncStorage.setItem(cacheKey, JSON.stringify(newTheme));

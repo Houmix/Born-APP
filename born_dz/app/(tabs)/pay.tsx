@@ -56,10 +56,10 @@ export default function PaymentScreen() {
                 delivery_type: deliveryType,
                 customer_identifier: customerIdentifier,
             };
-            
+
             console.log("Données à envoyer :", dataToSend);
             const accessToken = await AsyncStorage.getItem("token");
-            
+
             const response = await axios.post(
                 `${getPosUrl()}/order/api/createOrder/${paymentMethod}/`,
                 dataToSend,

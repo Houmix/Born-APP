@@ -16,10 +16,15 @@ import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from 'expo-linear-gradient';
 import Feather from '@expo/vector-icons/Feather';
+import { Ionicons } from "@expo/vector-icons";
+import axios from "axios";
 import { useBorneSync } from "@/hooks/useBorneSync.js";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSelector } from "@/components/LanguageSelector";
 import { useKioskTheme } from "@/contexts/KioskThemeContext";
+import { getPosUrl, getRestaurantId } from "@/utils/serverConfig";
+
+const LOYALTY_TAB = '__loyalty__';
 
 export default function MenuScreen() {
   const router = useRouter();
@@ -37,6 +42,13 @@ export default function MenuScreen() {
 
   // Hook de synchronisation
   const { categories, menus, isLoading } = useBorneSync();
+
+  // ── Fidélité ──────────────────────────────────────────────────────
+  const [loyaltyPoints, setLoyaltyPoints] = useState<number | null>(null);
+  const [loyaltyRewards, setLoyaltyRewards] = useState<any[]>([]);
+  const [loyaltyLoading, setLoyaltyLoading] = useState(false);
+  const [redeemingId, setRedeemingId] = useState<number | null>(null);
+  const [redeemSuccess, setRedeemSuccess] = useState<string | null>(null);
 
   // Variables de Timer
   const mainTimerRef = useRef(null);
@@ -126,6 +138,47 @@ export default function MenuScreen() {
       setCartCount(count);
     } catch {
       setCartCount(0);
+    }
+  };
+
+  const loadLoyalty = async () => {
+    setLoyaltyLoading(true);
+    setRedeemSuccess(null);
+    try {
+      const restaurantId = getRestaurantId();
+      const phone = await AsyncStorage.getItem("User_phone");
+      const [rewardsRes, pointsRes] = await Promise.all([
+        axios.get(`${getPosUrl()}/customer/api/loyalty/rewards/${restaurantId}/`, { timeout: 5000 }),
+        phone
+          ? axios.get(`${getPosUrl()}/customer/api/loyalty/lookup/?identifier=${phone}&restaurant_id=${restaurantId}`, { timeout: 5000 })
+          : Promise.resolve(null),
+      ]);
+      setLoyaltyRewards(rewardsRes.data || []);
+      setLoyaltyPoints(pointsRes ? (pointsRes.data.points ?? 0) : null);
+    } catch {
+      setLoyaltyRewards([]);
+    } finally {
+      setLoyaltyLoading(false);
+    }
+  };
+
+  const handleRedeem = async (reward: any) => {
+    const phone = await AsyncStorage.getItem("User_phone");
+    if (!phone) return;
+    setRedeemingId(reward.id);
+    try {
+      const restaurantId = getRestaurantId();
+      await axios.post(`${getPosUrl()}/customer/api/loyalty/redeem/`, {
+        identifier: phone,
+        restaurant_id: restaurantId,
+        reward_id: reward.id,
+      });
+      setLoyaltyPoints(prev => prev !== null ? prev - reward.points_required : null);
+      setRedeemSuccess(`"${reward.name}" utilisée avec succès !`);
+    } catch {
+      setRedeemSuccess('Erreur lors de l\'échange');
+    } finally {
+      setRedeemingId(null);
     }
   };
 
@@ -551,11 +604,113 @@ export default function MenuScreen() {
               </Text>
             </TouchableOpacity>
           ))}
+
+          {/* ── Onglet Fidélité (si activé) ── */}
+          {theme.loyaltyEnabled && (
+            <TouchableOpacity
+              style={[
+                styles.categoryButton,
+                { backgroundColor: selectedCategory?.id === LOYALTY_TAB ? theme.selectedCategoryBgColor : theme.categoryBgColor },
+                selectedCategory?.id === LOYALTY_TAB && { borderLeftWidth: 4, borderColor: theme.secondaryColor },
+                { marginTop: 'auto', marginBottom: 0 }
+              ]}
+              onPress={() => {
+                setSelectedCategory({ id: LOYALTY_TAB, name: 'Fidélité' });
+                loadLoyalty();
+              }}
+            >
+              <Ionicons
+                name="star"
+                size={36}
+                color={selectedCategory?.id === LOYALTY_TAB ? theme.secondaryColor : theme.categoryTextColor}
+                style={{ marginBottom: 6 }}
+              />
+              <Text style={[
+                styles.categoryText,
+                { color: selectedCategory?.id === LOYALTY_TAB ? theme.secondaryColor : theme.categoryTextColor },
+              ]}>
+                Fidélité
+              </Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
 
-        {/* Grille des menus */}
+        {/* Grille des menus OU panneau fidélité */}
         <View style={[styles.menuGridContainer, { width: `${menuGridWidth}%` }]}>
-          {filteredMenus.length === 0 ? (
+          {selectedCategory?.id === LOYALTY_TAB ? (
+            /* ── Panneau Fidélité ── */
+            <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
+              {/* Solde de points */}
+              <View style={[loyaltyStyles.pointsBanner, { borderColor: theme.primaryColor + '40', backgroundColor: theme.primaryColor + '0D' }]}>
+                <Ionicons name="star" size={28} color={theme.primaryColor} />
+                <View style={{ flex: 1 }}>
+                  {loyaltyLoading ? (
+                    <ActivityIndicator size="small" color={theme.primaryColor} />
+                  ) : loyaltyPoints !== null ? (
+                    <>
+                      <Text style={[loyaltyStyles.pointsValue, { color: theme.primaryColor }]}>{loyaltyPoints} points</Text>
+                      <Text style={loyaltyStyles.pointsSub}>{theme.loyaltyPointsRate} DA = 1 point • Cumulés sur vos commandes</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={[loyaltyStyles.pointsValue, { color: theme.primaryColor }]}>Mode anonyme</Text>
+                      <Text style={loyaltyStyles.pointsSub}>Identifiez-vous pour voir vos points</Text>
+                    </>
+                  )}
+                </View>
+              </View>
+
+              {/* Message succès/erreur */}
+              {redeemSuccess && (
+                <View style={[loyaltyStyles.successBanner, { backgroundColor: redeemSuccess.includes('Erreur') ? '#FEE2E2' : '#DCFCE7', borderColor: redeemSuccess.includes('Erreur') ? '#F87171' : '#4ADE80' }]}>
+                  <Ionicons name={redeemSuccess.includes('Erreur') ? "close-circle" : "checkmark-circle"} size={22} color={redeemSuccess.includes('Erreur') ? '#EF4444' : '#16A34A'} />
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: redeemSuccess.includes('Erreur') ? '#EF4444' : '#16A34A', flex: 1 }}>{redeemSuccess}</Text>
+                </View>
+              )}
+
+              {/* Liste des récompenses */}
+              <Text style={[loyaltyStyles.sectionTitle, { color: theme.textColor }]}>Récompenses disponibles</Text>
+
+              {loyaltyLoading ? (
+                <ActivityIndicator size="large" color={theme.primaryColor} style={{ marginTop: 40 }} />
+              ) : loyaltyRewards.length === 0 ? (
+                <View style={loyaltyStyles.empty}>
+                  <Ionicons name="gift-outline" size={50} color="#CBD5E1" />
+                  <Text style={loyaltyStyles.emptyText}>Aucune récompense configurée</Text>
+                </View>
+              ) : (
+                loyaltyRewards.map(reward => {
+                  const canRedeem = loyaltyPoints !== null && loyaltyPoints >= reward.points_required;
+                  return (
+                    <View key={reward.id} style={[loyaltyStyles.rewardCard, canRedeem && { borderColor: theme.primaryColor }]}>
+                      <Ionicons name="gift" size={32} color={canRedeem ? theme.primaryColor : '#CBD5E1'} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[loyaltyStyles.rewardName, { color: theme.textColor }]}>{reward.name}</Text>
+                        {reward.description ? <Text style={loyaltyStyles.rewardDesc}>{reward.description}</Text> : null}
+                        <View style={[loyaltyStyles.ptsBadge, { backgroundColor: canRedeem ? theme.primaryColor : '#E2E8F0' }]}>
+                          <Text style={[loyaltyStyles.ptsBadgeText, { color: canRedeem ? 'white' : '#94A3B8' }]}>
+                            {reward.points_required} pts requis
+                          </Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        disabled={!canRedeem || redeemingId === reward.id || loyaltyPoints === null}
+                        onPress={() => handleRedeem(reward)}
+                        style={[loyaltyStyles.redeemBtn, { backgroundColor: canRedeem ? theme.primaryColor : '#E2E8F0' }]}
+                      >
+                        {redeemingId === reward.id
+                          ? <ActivityIndicator size="small" color="white" />
+                          : <Text style={[loyaltyStyles.redeemBtnText, { color: canRedeem ? 'white' : '#94A3B8' }]}>
+                              {loyaltyPoints === null ? 'Connectez-vous' : canRedeem ? 'Utiliser' : 'Insuffisant'}
+                            </Text>
+                        }
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          ) : filteredMenus.length === 0 ? (
             <View style={styles.emptyGrid}>
               <Text style={styles.emptyGridText}>{t('terminal.no_products')}</Text>
             </View>
@@ -776,6 +931,40 @@ const modalStyles = StyleSheet.create({
   alertButtonCancel: { paddingVertical: 12, width: '100%', alignItems: 'center' },
   alertButtonTextWhite: { color: "white", fontSize: 18, fontWeight: "bold" },
   alertButtonTextRed: { color: "#ef4444", fontSize: 16, fontWeight: "bold" },
+});
+
+const loyaltyStyles = StyleSheet.create({
+  pointsBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    borderWidth: 1.5, borderRadius: 18, padding: 18,
+  },
+  pointsValue: { fontSize: 26, fontWeight: '900' },
+  pointsSub: { fontSize: 13, color: '#64748B', marginTop: 2 },
+  successBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderWidth: 1.5, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 12,
+  },
+  sectionTitle: { fontSize: 18, fontWeight: '800', marginTop: 4 },
+  empty: { alignItems: 'center', paddingVertical: 50, gap: 12 },
+  emptyText: { fontSize: 16, color: '#94A3B8' },
+  rewardCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 16,
+    backgroundColor: 'white', borderRadius: 18, padding: 18,
+    borderWidth: 1.5, borderColor: '#E2E8F0',
+    elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8,
+  },
+  rewardName: { fontSize: 17, fontWeight: '700', marginBottom: 4 },
+  rewardDesc: { fontSize: 13, color: '#64748B', marginBottom: 6 },
+  ptsBadge: {
+    alignSelf: 'flex-start', borderRadius: 20,
+    paddingHorizontal: 10, paddingVertical: 3,
+  },
+  ptsBadgeText: { fontSize: 13, fontWeight: '700' },
+  redeemBtn: {
+    borderRadius: 14, paddingHorizontal: 18, paddingVertical: 12,
+    minWidth: 110, alignItems: 'center',
+  },
+  redeemBtnText: { fontSize: 15, fontWeight: '700' },
 });
 
 const compStyles = StyleSheet.create({
