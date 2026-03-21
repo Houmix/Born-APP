@@ -3,7 +3,6 @@ import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, ActivityIndi
 import { useEffect, useState, useMemo } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { AntDesign, Ionicons } from '@expo/vector-icons';
-import { getPosUrl, buildPhotoUri } from "@/utils/serverConfig";
 import { useBorneSync } from '@/hooks/useBorneSync';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useKioskTheme } from '@/contexts/KioskThemeContext';
@@ -172,7 +171,7 @@ export default function MenuStepsScreen() {
                                 </View>
                             )}
                             <Image
-                                source={{ uri: buildPhotoUri(item.option.photo) ?? undefined }}
+                                source={{ uri: item.option.photo_url ?? undefined }}
                                 style={styles.optionImage}
                                 resizeMode="contain"
                             />

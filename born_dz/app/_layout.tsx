@@ -7,35 +7,28 @@ import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity } from "rea
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   loadServerUrl, hasSavedServerUrl, getPosUrl,
-  loadRestaurantId, getRestaurantId, saveRestaurantId,
+  saveRestaurantId, getRestaurantId,
   clearServerUrl,
 } from "@/utils/serverConfig";
 import ServerSetup from "@/components/ServerSetup";
-import ManagerLogin from "@/components/ManagerLogin";
 
-// Clé AsyncStorage pour la date d'expiration de licence
 const LICENSE_EXPIRY_KEY = 'license_expires_at';
 
 type AppState =
-  | 'loading'       // démarrage
-  | 'setup'         // aucun serveur configuré → ServerSetup
-  | 'login'         // serveur OK mais restaurant_id inconnu → connexion manager
-  | 'no_server'     // serveur configuré mais injoignable + pas de licence en cache
-  | 'no_license'    // licence expirée ou absente (confirmée par le serveur)
-  | 'ready';        // tout OK → afficher l'app
+  | 'loading'     // démarrage
+  | 'setup'       // aucun serveur configuré → ServerSetup
+  | 'no_server'   // serveur injoignable + pas de licence en cache
+  | 'no_data'     // serveur joignable mais POS pas encore initialisé
+  | 'no_license'  // licence expirée ou absente
+  | 'ready';      // tout OK
 
 async function cacheLicenseExpiry(expiresAt: string | null) {
-  if (expiresAt) {
-    await AsyncStorage.setItem(LICENSE_EXPIRY_KEY, expiresAt);
-  }
+  if (expiresAt) await AsyncStorage.setItem(LICENSE_EXPIRY_KEY, expiresAt);
+  else await AsyncStorage.removeItem(LICENSE_EXPIRY_KEY);
 }
 
 async function getCachedExpiresAt(): Promise<string | null> {
-  try {
-    return await AsyncStorage.getItem(LICENSE_EXPIRY_KEY);
-  } catch {
-    return null;
-  }
+  try { return await AsyncStorage.getItem(LICENSE_EXPIRY_KEY); } catch { return null; }
 }
 
 function isCachedLicenseStillValid(expiresAt: string | null): boolean {
@@ -46,21 +39,26 @@ function isCachedLicenseStillValid(expiresAt: string | null): boolean {
 export default function RootLayout() {
   const [appState, setAppState] = useState<AppState>('loading');
 
-  // ─── Ping serveur local ───────────────────────────────────────────────────
-  const pingServer = useCallback(async (): Promise<boolean> => {
+  // ─── Discover : ping + récupère restaurant_id depuis la caisse ───────────
+  const discoverServer = useCallback(async (): Promise<{ ok: boolean; restaurantId: string | null }> => {
     try {
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), 4000);
       const resp = await fetch(`${getPosUrl()}/api/sync/discover/`, { signal: controller.signal });
       clearTimeout(t);
-      return resp.ok;
+      if (resp.ok) {
+        const data = await resp.json();
+        const rid = data.restaurant_id ? data.restaurant_id.toString() : null;
+        return { ok: true, restaurantId: rid };
+      }
+      return { ok: false, restaurantId: null };
     } catch {
-      return false;
+      return { ok: false, restaurantId: null };
     }
   }, []);
 
-  // ─── Vérification licence sur le serveur (avec restaurant_id connu) ───────
-  const checkLicenseOnServer = useCallback(async (restaurantId: string): Promise<{ valid: boolean; expiresAt: string | null }> => {
+  // ─── Vérification licence sur la caisse ──────────────────────────────────
+  const checkLicense = useCallback(async (restaurantId: string): Promise<{ valid: boolean; expiresAt: string | null }> => {
     try {
       const res = await fetch(
         `${getPosUrl()}/api/license/restaurant-status/?restaurant_id=${restaurantId}`,
@@ -79,67 +77,51 @@ export default function RootLayout() {
     setAppState('loading');
 
     await loadServerUrl();
-    await loadRestaurantId();
 
     const hasUrl = await hasSavedServerUrl();
-    const restaurantId = getRestaurantId();
-    const cachedExpiry = await getCachedExpiresAt();
-    const cacheValid = isCachedLicenseStillValid(cachedExpiry);
-
-    // Pas de serveur configuré → ServerSetup
     if (!hasUrl) {
       setAppState('setup');
       return;
     }
 
-    // Ping du serveur local
-    const serverOk = await pingServer();
+    const cachedExpiry = await getCachedExpiresAt();
+    const cacheValid = isCachedLicenseStillValid(cachedExpiry);
+
+    // Découverte du serveur caisse (ping + restaurant_id)
+    const { ok: serverOk, restaurantId: discoveredId } = await discoverServer();
 
     if (!serverOk) {
-      if (cacheValid) {
-        // Serveur injoignable mais licence en cache encore valide → mode dégradé
-        setAppState('ready');
-      } else {
-        // Serveur injoignable et aucun cache valide → bloquer
-        setAppState('no_server');
-      }
+      setAppState(cacheValid ? 'ready' : 'no_server');
       return;
     }
 
-    // Serveur joignable mais restaurant_id pas encore connu → login manager
+    // Sauvegarder le restaurant_id si la caisse en retourne un
+    if (discoveredId) {
+      await saveRestaurantId(discoveredId);
+    }
+
+    const restaurantId = discoveredId || getRestaurantId();
+
     if (!restaurantId) {
-      setAppState('login');
+      // Caisse joignable mais pas encore initialisée (SetupWizard pas fait)
+      setAppState('no_data');
       return;
     }
 
-    // Serveur joignable + restaurant_id connu → vérifier la licence
-    const { valid, expiresAt } = await checkLicenseOnServer(restaurantId);
-
+    // Vérification licence
+    const { valid, expiresAt } = await checkLicense(restaurantId);
     if (valid) {
       await cacheLicenseExpiry(expiresAt);
       setAppState('ready');
     } else {
-      // Licence invalide côté serveur → effacer le cache et bloquer
-      await AsyncStorage.removeItem(LICENSE_EXPIRY_KEY);
-      setAppState('no_license');
+      await cacheLicenseExpiry(null);
+      setAppState(cacheValid ? 'ready' : 'no_license');
     }
-  }, [pingServer, checkLicenseOnServer]);
+  }, [discoverServer, checkLicense]);
 
   useEffect(() => { init(); }, [init]);
 
-  // ─── Callbacks des composants enfants ─────────────────────────────────────
-
-  const handleServerConfigured = useCallback(async () => {
-    // Après ServerSetup → toujours demander la connexion manager
-    setAppState('login');
-  }, []);
-
-  const handleLoginSuccess = useCallback(async (restaurantId: string, expiresAt: string | null) => {
-    // Login manager réussi + licence vérifiée → mettre en cache et lancer l'app
-    await cacheLicenseExpiry(expiresAt);
-    setAppState('ready');
-  }, []);
-
+  const handleServerConfigured = useCallback(() => { init(); }, [init]);
   const handleReconfigure = useCallback(async () => {
     await clearServerUrl();
     setAppState('setup');
@@ -160,20 +142,11 @@ export default function RootLayout() {
     return <ServerSetup onConfigured={handleServerConfigured} />;
   }
 
-  if (appState === 'login') {
-    return (
-      <ManagerLogin
-        onSuccess={handleLoginSuccess}
-        onBack={handleReconfigure}
-      />
-    );
-  }
-
   if (appState === 'no_server') {
     return (
       <View style={styles.splash}>
         <Text style={styles.splashIcon}>📡</Text>
-        <Text style={styles.splashTitle}>Serveur introuvable</Text>
+        <Text style={styles.splashTitle}>Caisse introuvable</Text>
         <Text style={styles.splashSub}>
           Impossible de joindre la caisse.{'\n'}
           Vérifiez que le logiciel caisse est démarré{'\n'}et que vous êtes sur le même réseau Wi-Fi.
@@ -188,14 +161,30 @@ export default function RootLayout() {
     );
   }
 
+  if (appState === 'no_data') {
+    return (
+      <View style={styles.splash}>
+        <Text style={styles.splashIcon}>⚙️</Text>
+        <Text style={styles.splashTitle}>Caisse non initialisée</Text>
+        <Text style={styles.splashSub}>
+          La caisse est joignable mais n'a pas encore été configurée.{'\n'}
+          Lancez d'abord la configuration sur le logiciel caisse.
+        </Text>
+        <TouchableOpacity style={styles.btn} onPress={init}>
+          <Text style={styles.btnText}>Réessayer</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   if (appState === 'no_license') {
     return (
       <View style={styles.splash}>
         <Text style={styles.splashIcon}>🔒</Text>
         <Text style={styles.splashTitle}>Licence inactive</Text>
         <Text style={styles.splashSub}>
-          Aucune licence active trouvée pour ce restaurant.{'\n'}
-          Contactez l'administrateur ClickGo pour activer votre abonnement.
+          Aucune licence active pour ce restaurant.{'\n'}
+          Contactez l'administrateur ClickGo.
         </Text>
         <TouchableOpacity style={styles.btn} onPress={init}>
           <Text style={styles.btnText}>Réessayer</Text>
@@ -231,37 +220,18 @@ const styles = StyleSheet.create({
   },
   splashIcon: { fontSize: 64, marginBottom: 16 },
   splashTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#fff',
-    marginBottom: 16,
-    textAlign: 'center',
+    fontSize: 28, fontWeight: '700', color: '#fff',
+    marginBottom: 16, textAlign: 'center',
   },
   splashSub: {
-    fontSize: 15,
-    color: '#888',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginTop: 8,
-    marginBottom: 32,
+    fontSize: 15, color: '#888', textAlign: 'center',
+    lineHeight: 24, marginTop: 8, marginBottom: 32,
   },
   btn: {
-    backgroundColor: '#756fbf',
-    paddingVertical: 14,
-    paddingHorizontal: 40,
-    borderRadius: 12,
-    marginTop: 12,
-    minWidth: 220,
-    alignItems: 'center',
+    backgroundColor: '#756fbf', paddingVertical: 14,
+    paddingHorizontal: 40, borderRadius: 12, marginTop: 12,
+    minWidth: 220, alignItems: 'center',
   },
-  btnSecondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#444',
-  },
-  btnText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 16,
-  },
+  btnSecondary: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#444' },
+  btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
 });

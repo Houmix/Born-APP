@@ -15,7 +15,6 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from 'expo-linear-gradient';
-import { getPosUrl, buildPhotoUri } from "@/utils/serverConfig";
 import Feather from '@expo/vector-icons/Feather';
 import { useBorneSync } from "@/hooks/useBorneSync.js";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -305,9 +304,9 @@ export default function MenuScreen() {
           onPress={() => setIsModalVisible(false)}
         >
           <TouchableOpacity activeOpacity={1} style={modalStyles.productCard}>
-            {selectedItemForModal.photo && (
+            {selectedItemForModal.photo_url && (
               <Image
-                source={{ uri: `${getPosUrl()}${selectedItemForModal.photo}` }}
+                source={{ uri: selectedItemForModal.photo_url }}
                 style={modalStyles.productImageFull}
                 resizeMode="cover"
               />
@@ -416,8 +415,8 @@ export default function MenuScreen() {
   };
 
   const renderMenuCard = (item) => {
-    const imageSource = item.photo
-      ? { uri: buildPhotoUri(item.photo)! }
+    const imageSource = item.photo_url
+      ? { uri: item.photo_url }
       : require('@/assets/logo.png');
     const displayPrice = getDisplayPrice(item);
     const style = theme.cardStyle || 'gradient';
@@ -538,9 +537,9 @@ export default function MenuScreen() {
               ]}
               onPress={() => setSelectedCategory(category)}
             >
-              {category.photo && (
+              {category.photo_url && (
                 <Image
-                  source={{ uri: buildPhotoUri(category.photo)! }}
+                  source={{ uri: category.photo_url }}
                   style={styles.categoryImage}
                 />
               )}
@@ -636,8 +635,8 @@ export default function MenuScreen() {
                               activeOpacity={0.8}
                             >
                               {isSelected && <View style={compStyles.checkBadge}><Feather name="check-circle" size={22} color={theme.primaryColor} /></View>}
-                              {opt.option?.photo
-                                ? <Image source={{ uri: buildPhotoUri(opt.option.photo)! }} style={compStyles.optImage} resizeMode="contain" />
+                              {opt.option?.photo_url
+                                ? <Image source={{ uri: opt.option.photo_url }} style={compStyles.optImage} resizeMode="contain" />
                                 : <View style={[compStyles.optImage, { backgroundColor: '#F1F5F9', borderRadius: 12, justifyContent: 'center', alignItems: 'center' }]}><Feather name="package" size={36} color="#94a3b8" /></View>
                               }
                               <Text style={[compStyles.optName, { color: theme.textColor }]} numberOfLines={2}>{opt.option?.name}</Text>
