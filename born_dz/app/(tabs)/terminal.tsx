@@ -681,11 +681,23 @@ export default function MenuScreen() {
               ) : (
                 loyaltyRewards.map(reward => {
                   const canRedeem = loyaltyPoints !== null && loyaltyPoints >= reward.points_required;
+                  const name = reward.display_name || reward.name || '—';
+                  const imgUrl = reward.display_image_url || null;
                   return (
                     <View key={reward.id} style={[loyaltyStyles.rewardCard, canRedeem && { borderColor: theme.primaryColor }]}>
-                      <Ionicons name="gift" size={32} color={canRedeem ? theme.primaryColor : '#CBD5E1'} />
+                      {/* Image ou icône */}
+                      {imgUrl ? (
+                        <Image source={{ uri: imgUrl }} style={loyaltyStyles.rewardImg} resizeMode="cover" />
+                      ) : (
+                        <View style={loyaltyStyles.rewardIconBox}>
+                          <Ionicons name="gift" size={32} color={canRedeem ? theme.primaryColor : '#CBD5E1'} />
+                        </View>
+                      )}
                       <View style={{ flex: 1 }}>
-                        <Text style={[loyaltyStyles.rewardName, { color: theme.textColor }]}>{reward.name}</Text>
+                        <Text style={[loyaltyStyles.rewardName, { color: theme.textColor }]}>{name}</Text>
+                        {reward.display_price != null && (
+                          <Text style={loyaltyStyles.rewardDesc}>Valeur : {reward.display_price} DA</Text>
+                        )}
                         {reward.description ? <Text style={loyaltyStyles.rewardDesc}>{reward.description}</Text> : null}
                         <View style={[loyaltyStyles.ptsBadge, { backgroundColor: canRedeem ? theme.primaryColor : '#E2E8F0' }]}>
                           <Text style={[loyaltyStyles.ptsBadgeText, { color: canRedeem ? 'white' : '#94A3B8' }]}>
@@ -952,6 +964,11 @@ const loyaltyStyles = StyleSheet.create({
     backgroundColor: 'white', borderRadius: 18, padding: 18,
     borderWidth: 1.5, borderColor: '#E2E8F0',
     elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8,
+  },
+  rewardImg: { width: 64, height: 64, borderRadius: 12 },
+  rewardIconBox: {
+    width: 64, height: 64, borderRadius: 12,
+    backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center',
   },
   rewardName: { fontSize: 17, fontWeight: '700', marginBottom: 4 },
   rewardDesc: { fontSize: 13, color: '#64748B', marginBottom: 6 },

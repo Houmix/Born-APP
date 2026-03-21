@@ -11,6 +11,8 @@ import {
   clearServerUrl,
 } from "@/utils/serverConfig";
 import ServerSetup from "@/components/ServerSetup";
+import { startServerMonitor, addStatusListener, removeStatusListener, ServerStatus } from "@/utils/serverMonitor";
+import { getQueueSize } from "@/utils/orderQueue";
 
 const LICENSE_EXPIRY_KEY = 'license_expires_at';
 
@@ -38,6 +40,8 @@ function isCachedLicenseStillValid(expiresAt: string | null): boolean {
 
 export default function RootLayout() {
   const [appState, setAppState] = useState<AppState>('loading');
+  const [serverStatus, setServerStatus] = useState<ServerStatus>('online');
+  const [queueSize, setQueueSize]       = useState(0);
 
   // ─── Discover : ping + récupère restaurant_id depuis la caisse ───────────
   const discoverServer = useCallback(async (): Promise<{ ok: boolean; restaurantId: string | null }> => {
@@ -121,6 +125,21 @@ export default function RootLayout() {
 
   useEffect(() => { init(); }, [init]);
 
+  // ─── Surveillance serveur (ping + re-scan IP + file d'attente) ───────────
+  useEffect(() => {
+    startServerMonitor();
+
+    const onStatus: Parameters<typeof addStatusListener>[0] = async (status) => {
+      setServerStatus(status);
+      // Mettre à jour le compteur de la file
+      const sz = await getQueueSize();
+      setQueueSize(sz);
+    };
+
+    addStatusListener(onStatus);
+    return () => removeStatusListener(onStatus);
+  }, []);
+
   const handleServerConfigured = useCallback(() => { init(); }, [init]);
   const handleReconfigure = useCallback(async () => {
     await clearServerUrl();
@@ -200,6 +219,17 @@ export default function RootLayout() {
     <BorneSyncProvider>
       <LanguageProvider>
         <KioskThemeProvider>
+          {/* Bannière hors-ligne discrète (coin supérieur) */}
+          {serverStatus !== 'online' && (
+            <View style={styles.offlineBanner}>
+              <Text style={styles.offlineBannerText}>
+                {serverStatus === 'reconnecting'
+                  ? '🔍 Recherche de la caisse…'
+                  : `📡 Caisse hors ligne${queueSize > 0 ? ` — ${queueSize} commande(s) en attente` : ''}`
+                }
+              </Text>
+            </View>
+          )}
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="+not-found" />
@@ -234,4 +264,10 @@ const styles = StyleSheet.create({
   },
   btnSecondary: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#444' },
   btnText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  offlineBanner: {
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 9999,
+    backgroundColor: '#ef4444', paddingVertical: 6, paddingHorizontal: 16,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
+  },
+  offlineBannerText: { color: 'white', fontWeight: '700', fontSize: 13 },
 });

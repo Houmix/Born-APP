@@ -5,6 +5,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { getPosUrl, getRestaurantId } from "@/utils/serverConfig";
+import { enqueueOrder } from "@/utils/orderQueue";
 import { useEffect, useState } from "react";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useKioskTheme } from '@/contexts/KioskThemeContext';
@@ -79,10 +80,25 @@ export default function PaymentScreen() {
                 setErrorMessage(t('errors.create_order'));
                 Alert.alert(t('error'), t('errors.create_order'));
             }
-        } catch (error) {
-            console.error("Erreur lors de la création de la commande", error);
-            setErrorMessage(t('errors.create_order'));
-            Alert.alert(t('error'), t('errors.network'));
+        } catch (error: any) {
+            // Erreur réseau (serveur down) → mise en file d'attente
+            const isNetworkError = !error.response; // pas de réponse HTTP = réseau mort
+            if (isNetworkError) {
+                try {
+                    const accessToken = await AsyncStorage.getItem("token");
+                    await enqueueOrder(paymentMethod, dataToSend, accessToken || '');
+                    // Vider le panier et continuer vers la confirmation
+                    await AsyncStorage.multiRemove(["pendingOrder", "orderTakeaway", "orderDeliveryType", "orderCustomerIdentifier"]);
+                    router.push("/confirmation");
+                } catch {
+                    setErrorMessage(t('errors.create_order'));
+                    Alert.alert(t('error'), t('errors.network'));
+                }
+            } else {
+                console.error("Erreur lors de la création de la commande", error);
+                setErrorMessage(t('errors.create_order'));
+                Alert.alert(t('error'), t('errors.network'));
+            }
         } finally {
             setIsProcessing(false);
         }
