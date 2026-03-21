@@ -6,6 +6,7 @@
     "start": "electron .",
     "postinstall": "electron-builder install-app-deps",
     "build:web": "cd ../born_dz && npx expo export -p web",
+    "build": "npm run build:web && electron-builder",
     "dist": "npm run build:web && electron-builder"
   },
   "build": {
@@ -13,8 +14,7 @@
     "productName": "ClickGo Borne",
     "asar": true,
     "win": {
-      "target": "nsis",
-      "icon": "build/icon.ico"
+      "target": "nsis"
     },
     "nsis": {
       "oneClick": false,

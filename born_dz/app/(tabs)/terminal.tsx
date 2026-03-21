@@ -147,15 +147,30 @@ export default function MenuScreen() {
     try {
       const restaurantId = getRestaurantId();
       const phone = await AsyncStorage.getItem("User_phone");
-      const [rewardsRes, pointsRes] = await Promise.all([
+
+      const [rewardsResult, pointsResult] = await Promise.allSettled([
         axios.get(`${getPosUrl()}/customer/api/loyalty/rewards/${restaurantId}/`, { timeout: 5000 }),
         phone
           ? axios.get(`${getPosUrl()}/customer/api/loyalty/lookup/?identifier=${phone}&restaurant_id=${restaurantId}`, { timeout: 5000 })
           : Promise.resolve(null),
       ]);
-      setLoyaltyRewards(rewardsRes.data || []);
-      setLoyaltyPoints(pointsRes ? (pointsRes.data.points ?? 0) : null);
-    } catch {
+
+      if (rewardsResult.status === 'fulfilled') {
+        setLoyaltyRewards(rewardsResult.value?.data || []);
+      } else {
+        console.warn('[LOYALTY] Erreur chargement récompenses:', rewardsResult.reason?.message);
+        setLoyaltyRewards([]);
+      }
+
+      if (pointsResult.status === 'fulfilled') {
+        const data = pointsResult.value?.data;
+        setLoyaltyPoints(data != null ? (data.points ?? 0) : null);
+      } else {
+        console.warn('[LOYALTY] Erreur chargement points:', pointsResult.reason?.message);
+        setLoyaltyPoints(phone ? 0 : null);
+      }
+    } catch (e) {
+      console.warn('[LOYALTY] Erreur inattendue:', e);
       setLoyaltyRewards([]);
     } finally {
       setLoyaltyLoading(false);
