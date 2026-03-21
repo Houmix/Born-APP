@@ -39,7 +39,7 @@ export default function WelcomeScreen() {
       ) : (
         <Image
           style={styles.background}
-          source={require('@/assets/images/welcome.png')}
+          source={require('@/assets/images/welcome.jpg')}
           resizeMode="cover"
         />
       )}

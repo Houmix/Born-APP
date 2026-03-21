@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     },
     optionCardSelected: { backgroundColor: '#FFF9F5' },
     checkBadge: { position: 'absolute', top: 10, right: 10, zIndex: 1 },
-    optionImage: { width: '80%', height: 100, marginBottom: 10 },
+    optionImage: { width: '80%', height: 100, marginBottom: 10, backgroundColor: 'white' },
     optionName: { fontSize: 16, fontWeight: '700', textAlign: 'center', color: COLORS.text }, // sera surchargé inline si besoin
     optionExtra: { fontSize: 14, fontWeight: '600', marginTop: 5 },
 

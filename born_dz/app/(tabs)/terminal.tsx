@@ -429,8 +429,8 @@ export default function MenuScreen() {
           onPress={() => handleAddToCart(item)}
           activeOpacity={0.85}
         >
-          <View style={{ flex: 6, overflow: 'hidden' }}>
-            <Image source={imageSource} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+          <View style={{ flex: 6, overflow: 'hidden', backgroundColor: 'white' }}>
+            <Image source={imageSource} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
           </View>
           <View style={{ flex: 4, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 10, justifyContent: 'space-between', backgroundColor: theme.cardBgColor }}>
             <Text style={{ color: theme.textColor, fontWeight: '700', fontSize: 13, lineHeight: 18 }} numberOfLines={2}>{item.name}</Text>
@@ -449,11 +449,11 @@ export default function MenuScreen() {
       return (
         <TouchableOpacity
           key={item.id}
-          style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2 }]}
+          style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2, backgroundColor: 'white' }]}
           onPress={() => handleAddToCart(item)}
           activeOpacity={0.85}
         >
-          <Image source={imageSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <Image source={imageSource} style={StyleSheet.absoluteFill} resizeMode="contain" />
           <View style={{ position: 'absolute', top: 12, left: 10, right: 10, backgroundColor: 'rgba(15,23,42,0.6)', borderRadius: 100, paddingVertical: 7, paddingHorizontal: 12 }}>
             <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }} numberOfLines={1}>{item.name}</Text>
           </View>
@@ -473,11 +473,11 @@ export default function MenuScreen() {
     return (
       <TouchableOpacity
         key={item.id}
-        style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2 }]}
+        style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2, backgroundColor: 'white' }]}
         onPress={() => handleAddToCart(item)}
         activeOpacity={0.85}
       >
-        <Image source={imageSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        <Image source={imageSource} style={StyleSheet.absoluteFill} resizeMode="contain" />
         <LinearGradient colors={['transparent', 'rgba(0,0,0,0.82)']} style={styles.menuOverlay}>
           <Text style={styles.menuText} numberOfLines={2}>{item.name}</Text>
           <View style={styles.priceActionContainer}>
@@ -795,7 +795,7 @@ const compStyles = StyleSheet.create({
   optionsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
   optCard: { width: "21%", minWidth: 130, borderRadius: 18, padding: 14, alignItems: "center", borderWidth: 2, borderColor: "#E2E8F0", backgroundColor: "white", elevation: 3 },
   checkBadge: { position: "absolute", top: 8, right: 8 },
-  optImage: { width: 80, height: 80, marginBottom: 10 },
+  optImage: { width: 80, height: 80, marginBottom: 10, backgroundColor: 'white' },
   optName: { fontSize: 14, fontWeight: "700", textAlign: "center" },
   optExtra: { fontSize: 13, fontWeight: "600", marginTop: 5 },
   footer: { padding: 20, borderTopWidth: 1, borderTopColor: "#E2E8F0" },

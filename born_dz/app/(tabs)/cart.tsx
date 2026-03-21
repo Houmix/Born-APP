@@ -235,7 +235,7 @@ export default function CartPage() {
                 return (
                   <View key={item.id} style={[csStyles.card, { backgroundColor: theme.cardBgColor }]}>
                     {item.photo_url ? (
-                      <Image source={{ uri: item.photo_url }} style={csStyles.itemImage} resizeMode="cover" />
+                      <Image source={{ uri: item.photo_url }} style={csStyles.itemImage} resizeMode="contain" />
                     ) : (
                       <View style={[csStyles.itemImage, csStyles.imagePlaceholder]}>
                         <Ionicons name="fast-food" size={40} color={theme.categoryTextColor} />
@@ -351,7 +351,7 @@ const csStyles = StyleSheet.create({
     borderRadius: 20, padding: 15, alignItems: 'center',
     elevation: 3, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8,
   },
-  itemImage: { width: '100%', height: 100, borderRadius: 12, marginBottom: 10 },
+  itemImage: { width: '100%', height: 100, borderRadius: 12, marginBottom: 10, backgroundColor: 'white' },
   imagePlaceholder: { backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
   itemName: { fontSize: 14, fontWeight: '700', textAlign: 'center', marginBottom: 4 },
   itemPrice: { fontSize: 15, fontWeight: '800', marginBottom: 10 },
