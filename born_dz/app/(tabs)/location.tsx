@@ -22,7 +22,7 @@ export default function LocationScreen() {
         check();
     }, []);
 
-    const selectLocation = async (deliveryType: 'sur_place' | 'emporter' | 'livraison') => {
+    const selectLocation = async (deliveryType: 'sur_place' | 'emporter') => {
         try {
             const stored = await AsyncStorage.getItem("pendingOrder");
             if (!stored) {
@@ -69,10 +69,6 @@ export default function LocationScreen() {
                     <MaterialIcons name="food-bank" size={isTablet ? 200 : 120} color="#0056b3" />
                 </TouchableOpacity>
 
-                <TouchableOpacity style={[styles.box, styles.boxDelivery]} onPress={() => selectLocation('livraison')}>
-                    <Text style={styles.text}>Livraison</Text>
-                    <MaterialIcons name="delivery-dining" size={isTablet ? 200 : 120} color="#f97316" />
-                </TouchableOpacity>
             </View>
 
             {errorMessage ? (
@@ -144,10 +140,6 @@ const styles = StyleSheet.create({
         elevation: 5,
         borderWidth: 2,
         borderColor: "#e2e8f0",
-    },
-    boxDelivery: {
-        borderColor: "#fed7aa",
-        backgroundColor: "#fff7ed",
     },
     text: {
         color: "black",
