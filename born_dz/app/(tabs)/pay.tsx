@@ -41,6 +41,8 @@ export default function PaymentScreen() {
         if (isProcessing) return;
 
         setIsProcessing(true);
+        let dataToSend: Record<string, any> | null = null;
+        let accessToken: string | null = null;
         try {
             const Employee_id = await AsyncStorage.getItem("Employee_id");
             const restaurantId = getRestaurantId();
@@ -49,7 +51,7 @@ export default function PaymentScreen() {
             const deliveryType = await AsyncStorage.getItem("orderDeliveryType") || 'sur_place';
             const customerIdentifier = await AsyncStorage.getItem("orderCustomerIdentifier") || '';
 
-            const dataToSend = {
+            dataToSend = {
                 user: Employee_id,
                 items: order,
                 restaurant: parseInt(restaurantId || "0", 10),
@@ -59,7 +61,7 @@ export default function PaymentScreen() {
             };
 
             console.log("Données à envoyer :", dataToSend);
-            const accessToken = await AsyncStorage.getItem("token");
+            accessToken = await AsyncStorage.getItem("token");
 
             const response = await axios.post(
                 `${getPosUrl()}/order/api/createOrder/${paymentMethod}/`,
@@ -83,9 +85,8 @@ export default function PaymentScreen() {
         } catch (error: any) {
             // Erreur réseau (serveur down) → mise en file d'attente
             const isNetworkError = !error.response; // pas de réponse HTTP = réseau mort
-            if (isNetworkError) {
+            if (isNetworkError && dataToSend) {
                 try {
-                    const accessToken = await AsyncStorage.getItem("token");
                     await enqueueOrder(paymentMethod, dataToSend, accessToken || '');
                     // Vider le panier et continuer vers la confirmation
                     await AsyncStorage.multiRemove(["pendingOrder", "orderTakeaway", "orderDeliveryType", "orderCustomerIdentifier"]);
