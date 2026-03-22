@@ -73,13 +73,45 @@ export default function identificationScreen() {
             await AsyncStorage.setItem("User_phone", userData.phone);
             await AsyncStorage.setItem("Employee_id", userData.id.toString());
             await AsyncStorage.setItem("Employee_restaurant_id", getRestaurantId().toString());
-            
+            // ✅ Pré-remplir l'identifiant client avec le numéro de téléphone pour la fidélité
+            await AsyncStorage.setItem("orderCustomerIdentifier", userData.phone);
+
             console.log("✅ Session utilisateur créée:", {
                 user_id: userData.id,
                 phone: userData.phone,
                 restaurant: getRestaurantId()
             });
-            
+
+            // ✅ ÉTAPE 3b : Synchroniser les points de fidélité depuis le cloud
+            try {
+                const CLOUD_URL = 'https://borndz-production.up.railway.app';
+                const restaurantId = getRestaurantId();
+                const cloudRes = await axios.get(
+                    `${CLOUD_URL}/customer/api/loyalty/lookup/?identifier=${userData.phone}&restaurant_id=${restaurantId}`,
+                    { timeout: 5000 }
+                );
+                if (cloudRes.data && cloudRes.data.exists && cloudRes.data.points > 0) {
+                    console.log(`☁️ Points fidélité cloud: ${cloudRes.data.points}`);
+                    // Appliquer localement
+                    await axios.post(
+                        `${getPosUrl()}/api/sync/apply/`,
+                        {
+                            table: 'customer_loyalty',
+                            action: 'create',
+                            data: {
+                                customer_identifier: userData.phone,
+                                restaurant_id: restaurantId,
+                                points: cloudRes.data.points,
+                            }
+                        },
+                        { timeout: 5000 }
+                    );
+                    console.log("✅ Points de fidélité synchronisés depuis le cloud");
+                }
+            } catch (loyaltyErr) {
+                console.log("⚠️ Sync fidélité cloud ignorée:", loyaltyErr.message);
+            }
+
             // ✅ ÉTAPE 4 : Redirection
             navigation.navigate("terminal");
             

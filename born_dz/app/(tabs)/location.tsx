@@ -18,6 +18,9 @@ export default function LocationScreen() {
         const check = async () => {
             const stored = await AsyncStorage.getItem("pendingOrder");
             if (!stored) setErrorMessage(t('errors.no_order'));
+            // Pré-remplir avec le numéro de téléphone si l'utilisateur est connecté
+            const phone = await AsyncStorage.getItem("User_phone");
+            if (phone) setCustomerIdentifier(phone);
         };
         check();
     }, []);
@@ -47,14 +50,16 @@ export default function LocationScreen() {
 
             {/* Champ identifiant client */}
             <View style={styles.identifierBox}>
-                <Text style={styles.identifierLabel}>Votre nom / immatriculation / biper</Text>
+                <Text style={styles.identifierLabel}>📱 N° de téléphone (fidélité)</Text>
                 <TextInput
                     style={styles.identifierInput}
-                    placeholder="ex: Chevrolet, Jean, Biper 12…"
+                    placeholder="ex: 0550123456 — optionnel"
                     placeholderTextColor="#94a3b8"
                     value={customerIdentifier}
                     onChangeText={setCustomerIdentifier}
-                    autoCapitalize="characters"
+                    keyboardType="phone-pad"
+                    autoCapitalize="none"
+                    maxLength={14}
                 />
             </View>
 
