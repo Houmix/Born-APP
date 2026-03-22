@@ -54,6 +54,9 @@ export default function PaymentScreen() {
             const deliveryType = await AsyncStorage.getItem("orderDeliveryType") || 'sur_place';
             const customerIdentifier = await AsyncStorage.getItem("orderCustomerIdentifier") || '';
 
+            const rewardNamesRaw = await AsyncStorage.getItem("pendingRewardNames");
+            const rewardNames = rewardNamesRaw ? JSON.parse(rewardNamesRaw) : [];
+
             dataToSend = {
                 user: Employee_id,
                 items: order,
@@ -61,6 +64,7 @@ export default function PaymentScreen() {
                 takeaway: isTakeaway,
                 delivery_type: deliveryType,
                 customer_identifier: customerIdentifier,
+                reward_names: rewardNames,
             };
 
             console.log("Données à envoyer :", dataToSend);
@@ -96,7 +100,7 @@ export default function PaymentScreen() {
                         }
                     }
                 } catch {}
-                await AsyncStorage.multiRemove(["pendingOrder", "orderTakeaway", "orderDeliveryType", "orderCustomerIdentifier", "pendingRewards"]);
+                await AsyncStorage.multiRemove(["pendingOrder", "orderTakeaway", "orderDeliveryType", "orderCustomerIdentifier", "pendingRewards", "pendingRewardNames"]);
                 await AsyncStorage.setItem("lastOrderId", response.data.order_id.toString());
                 router.push("/confirmation");
             } else {
@@ -111,7 +115,7 @@ export default function PaymentScreen() {
                     await enqueueOrder(paymentMethod, dataToSend, accessToken || '');
                     // Vider le panier et continuer vers la confirmation
                     // Note: on ne débite pas les points si hors-ligne (le serveur n'est pas joignable)
-                    await AsyncStorage.multiRemove(["pendingOrder", "orderTakeaway", "orderDeliveryType", "orderCustomerIdentifier", "pendingRewards"]);
+                    await AsyncStorage.multiRemove(["pendingOrder", "orderTakeaway", "orderDeliveryType", "orderCustomerIdentifier", "pendingRewards", "pendingRewardNames"]);
                     router.push("/confirmation");
                 } catch {
                     setErrorMessage(t('errors.create_order'));

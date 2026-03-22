@@ -18,6 +18,8 @@ export interface KioskTheme {
     categoryBgColor: string;
     selectedCategoryBgColor: string;
     categoryTextColor: string;
+    selectedCategoryTextColor: string;
+    sidebarDisplayMode: 'with_image' | 'without_image';
     logoUrl: string | null;
     screensaverImageUrl: string | null;
     screensaverVideoUrl: string | null;
@@ -37,6 +39,8 @@ const DEFAULT_THEME: KioskTheme = {
     categoryBgColor: '#1e293b',
     selectedCategoryBgColor: '#334155',
     categoryTextColor: '#94a3b8',
+    selectedCategoryTextColor: '#ff69b4',
+    sidebarDisplayMode: 'with_image',
     logoUrl: null,
     screensaverImageUrl: null,
     screensaverVideoUrl: null,
@@ -83,7 +87,9 @@ export function KioskThemeProvider({ children }: { children: React.ReactNode }) 
                 sidebarColor:              data.sidebar_color               || DEFAULT_THEME.sidebarColor,
                 categoryBgColor:           data.category_bg_color           || DEFAULT_THEME.categoryBgColor,
                 selectedCategoryBgColor:   data.selected_category_bg_color  || DEFAULT_THEME.selectedCategoryBgColor,
-                categoryTextColor:         data.category_text_color         || DEFAULT_THEME.categoryTextColor,
+                categoryTextColor:             data.category_text_color              || DEFAULT_THEME.categoryTextColor,
+                selectedCategoryTextColor:    data.selected_category_text_color     || DEFAULT_THEME.selectedCategoryTextColor,
+                sidebarDisplayMode:           (data.sidebar_display_mode as 'with_image' | 'without_image') || DEFAULT_THEME.sidebarDisplayMode,
                 logoUrl:             data.logo_url              || null,
                 screensaverImageUrl: data.screensaver_image_url || null,
                 screensaverVideoUrl: data.screensaver_video_url || null,

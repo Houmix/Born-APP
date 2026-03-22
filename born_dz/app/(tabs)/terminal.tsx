@@ -628,7 +628,7 @@ export default function MenuScreen() {
               ]}
               onPress={() => setSelectedCategory(category)}
             >
-              {category.photo_url && (
+              {theme.sidebarDisplayMode === 'with_image' && category.photo_url && (
                 <Image
                   source={{ uri: category.photo_url }}
                   style={styles.categoryImage}
@@ -636,7 +636,7 @@ export default function MenuScreen() {
               )}
               <Text style={[
                 styles.categoryText,
-                { color: selectedCategory?.id === category.id ? theme.secondaryColor : theme.categoryTextColor },
+                { color: selectedCategory?.id === category.id ? theme.selectedCategoryTextColor : theme.categoryTextColor },
               ]}>
                 {category.name}
               </Text>
@@ -660,12 +660,12 @@ export default function MenuScreen() {
               <Ionicons
                 name="star"
                 size={36}
-                color={selectedCategory?.id === LOYALTY_TAB ? theme.secondaryColor : theme.categoryTextColor}
+                color={selectedCategory?.id === LOYALTY_TAB ? theme.selectedCategoryTextColor : theme.categoryTextColor}
                 style={{ marginBottom: 6 }}
               />
               <Text style={[
                 styles.categoryText,
-                { color: selectedCategory?.id === LOYALTY_TAB ? theme.secondaryColor : theme.categoryTextColor },
+                { color: selectedCategory?.id === LOYALTY_TAB ? theme.selectedCategoryTextColor : theme.categoryTextColor },
               ]}>
                 Fidélité
               </Text>

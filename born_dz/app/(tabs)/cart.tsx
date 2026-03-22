@@ -156,7 +156,12 @@ export default function CartPage() {
         extra: order.extra === true,
         options: order.steps?.flatMap((s: any) => s.selectedOptions.map((o: any) => ({ step: s.stepId, option: o.optionId }))) || [],
       }));
+    // Noms des récompenses fidélité pour l'affichage sur le ticket
+    const rewardNames = list
+      .filter(order => order.isReward)
+      .map(order => order.menuName?.replace('🎁 ', '') || 'Récompense fidélité');
     await AsyncStorage.setItem("pendingOrder", JSON.stringify(formattedOrder));
+    await AsyncStorage.setItem("pendingRewardNames", JSON.stringify(rewardNames));
     router.push("/location");
   };
 
