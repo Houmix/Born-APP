@@ -186,10 +186,10 @@ export default function MenuScreen() {
 
       // Ajouter la récompense au panier avec prix 0
       const existingOrders = JSON.parse(await AsyncStorage.getItem("orderList") || "[]");
-      // Éviter d'ajouter 2x la même récompense
-      const alreadyInCart = existingOrders.some((item: any) => item.isReward && item.rewardId === reward.id);
-      if (alreadyInCart) {
-        setRedeemSuccess('Cette récompense est déjà dans votre panier');
+      // Une seule récompense à la fois dans le panier
+      const alreadyHasReward = existingOrders.some((item: any) => item.isReward);
+      if (alreadyHasReward) {
+        setRedeemSuccess('Une seule récompense à la fois — retirez-la du panier d\'abord');
         return;
       }
       existingOrders.push({

@@ -17,16 +17,19 @@ export default function PaymentScreen() {
     const [order, setOrder] = useState([]);
     const [errorMessage, setErrorMessage] = useState("");
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isFreeOrder, setIsFreeOrder] = useState(false);
 
     useEffect(() => {
         const loadOrder = async () => {
-            const allKeys = await AsyncStorage.getAllKeys();
-            const allItems = await AsyncStorage.multiGet(allKeys);
-            console.log("Stored items in session:", allItems);
             try {
                 const stored = await AsyncStorage.getItem("pendingOrder");
                 if (stored) {
-                    setOrder(JSON.parse(stored));
+                    const parsed = JSON.parse(stored);
+                    setOrder(parsed);
+                    // Commande gratuite : aucun article réel (seulement des récompenses filtrées)
+                    if (parsed.length === 0) {
+                        setIsFreeOrder(true);
+                    }
                 } else {
                     setErrorMessage(t('errors.no_order'));
                 }
@@ -127,33 +130,48 @@ export default function PaymentScreen() {
     const card = () => processPayment(1);
     const cash = () => processPayment(0);
 
+    // Commande 100% fidélité (0 DA) → confirmation automatique sans sélection paiement
+    useEffect(() => {
+        if (isFreeOrder && !isProcessing) {
+            processPayment(1);
+        }
+    }, [isFreeOrder]);
+
     return (
         <View style={[styles.main, { backgroundColor: theme.backgroundColor }, isRTL && { direction: 'rtl' }]}>
             <View style={styles.titleBox}>
                 <Text style={[styles.title, { color: theme.primaryColor }]}>{t('payment.title')}</Text>
             </View>
 
-            <View style={styles.container}>
-                <TouchableOpacity
-                    style={[styles.box, { backgroundColor: theme.cardBgColor }, isProcessing && styles.boxDisabled]}
-                    onPress={cash}
-                    disabled={isProcessing}
-                >
-                    <Text style={[styles.text, { color: theme.textColor }]}>{t('payment.cash')}</Text>
-                    <Ionicons name="cash-outline" size={250} color={isProcessing ? "#ccc" : theme.textColor} />
-                </TouchableOpacity>
+            {isFreeOrder ? (
+                <View style={styles.processingContainer}>
+                    <Text style={[styles.processingText, { color: theme.primaryColor }]}>
+                        🎁 Confirmation de votre récompense…
+                    </Text>
+                </View>
+            ) : (
+                <View style={styles.container}>
+                    <TouchableOpacity
+                        style={[styles.box, { backgroundColor: theme.cardBgColor }, isProcessing && styles.boxDisabled]}
+                        onPress={cash}
+                        disabled={isProcessing}
+                    >
+                        <Text style={[styles.text, { color: theme.textColor }]}>{t('payment.cash')}</Text>
+                        <Ionicons name="cash-outline" size={250} color={isProcessing ? "#ccc" : theme.textColor} />
+                    </TouchableOpacity>
 
-                <TouchableOpacity
-                    style={[styles.box, { backgroundColor: theme.cardBgColor }, isProcessing && styles.boxDisabled]}
-                    onPress={card}
-                    disabled={isProcessing}
-                >
-                    <Text style={[styles.text, { color: theme.textColor }]}>{t('payment.card')}</Text>
-                    <AntDesign name="creditcard" size={250} color={isProcessing ? "#ccc" : theme.textColor} />
-                </TouchableOpacity>
-            </View>
+                    <TouchableOpacity
+                        style={[styles.box, { backgroundColor: theme.cardBgColor }, isProcessing && styles.boxDisabled]}
+                        onPress={card}
+                        disabled={isProcessing}
+                    >
+                        <Text style={[styles.text, { color: theme.textColor }]}>{t('payment.card')}</Text>
+                        <AntDesign name="creditcard" size={250} color={isProcessing ? "#ccc" : theme.textColor} />
+                    </TouchableOpacity>
+                </View>
+            )}
 
-            {isProcessing && (
+            {isProcessing && !isFreeOrder && (
                 <View style={styles.processingContainer}>
                     <Text style={styles.processingText}>{t('payment.processing')}</Text>
                 </View>
