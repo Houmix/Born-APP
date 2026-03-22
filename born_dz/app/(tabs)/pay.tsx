@@ -75,7 +75,25 @@ export default function PaymentScreen() {
             );
 
             if (response.status === 200 || response.status === 201) {
-                await AsyncStorage.multiRemove(["pendingOrder", "orderTakeaway", "orderDeliveryType", "orderCustomerIdentifier"]);
+                // ✅ Débiter les points de fidélité après paiement confirmé
+                try {
+                    const pendingRewardsRaw = await AsyncStorage.getItem("pendingRewards");
+                    if (pendingRewardsRaw) {
+                        const pendingRewards = JSON.parse(pendingRewardsRaw);
+                        const restaurantId = getRestaurantId();
+                        const phone = await AsyncStorage.getItem("User_phone");
+                        if (phone && pendingRewards.length > 0) {
+                            for (const r of pendingRewards) {
+                                await axios.post(`${getPosUrl()}/customer/api/loyalty/redeem/`, {
+                                    identifier: phone,
+                                    restaurant_id: restaurantId,
+                                    reward_id: r.rewardId,
+                                }, { timeout: 8000 }).catch(() => {});
+                            }
+                        }
+                    }
+                } catch {}
+                await AsyncStorage.multiRemove(["pendingOrder", "orderTakeaway", "orderDeliveryType", "orderCustomerIdentifier", "pendingRewards"]);
                 await AsyncStorage.setItem("lastOrderId", response.data.order_id.toString());
                 router.push("/confirmation");
             } else {
@@ -89,7 +107,8 @@ export default function PaymentScreen() {
                 try {
                     await enqueueOrder(paymentMethod, dataToSend, accessToken || '');
                     // Vider le panier et continuer vers la confirmation
-                    await AsyncStorage.multiRemove(["pendingOrder", "orderTakeaway", "orderDeliveryType", "orderCustomerIdentifier"]);
+                    // Note: on ne débite pas les points si hors-ligne (le serveur n'est pas joignable)
+                    await AsyncStorage.multiRemove(["pendingOrder", "orderTakeaway", "orderDeliveryType", "orderCustomerIdentifier", "pendingRewards"]);
                     router.push("/confirmation");
                 } catch {
                     setErrorMessage(t('errors.create_order'));

@@ -65,6 +65,9 @@ export default function CartPage() {
   };
 
   const changeQuantity = (index: number, delta: number) => {
+    const item = orderList[index];
+    // Les récompenses sont à quantité fixe 1 — seule la suppression est permise
+    if (item?.isReward && delta > 0) return;
     const newList = [...orderList];
     const newQty = newList[index].quantity + delta;
     if (newQty > 0) {
@@ -75,7 +78,18 @@ export default function CartPage() {
     }
   };
 
-  const removeMenu = (index: number) => {
+  const removeMenu = async (index: number) => {
+    const item = orderList[index];
+    // Si c'est une récompense, la retirer aussi de pendingRewards
+    if (item?.isReward) {
+      try {
+        const raw = await AsyncStorage.getItem("pendingRewards");
+        if (raw) {
+          const pending = JSON.parse(raw).filter((r: any) => r.rewardId !== item.rewardId);
+          await AsyncStorage.setItem("pendingRewards", JSON.stringify(pending));
+        }
+      } catch {}
+    }
     const newList = orderList.filter((_, i) => i !== index);
     updateCart(newList);
   };
@@ -132,11 +146,16 @@ export default function CartPage() {
   };
 
   const proceedToPayment = async (list: any[]) => {
-    const formattedOrder = list.map(order => ({
-      menu: order.menuId,
-      quantity: order.quantity,
-      options: order.steps?.flatMap((s: any) => s.selectedOptions.map((o: any) => ({ step: s.stepId, option: o.optionId }))) || [],
-    }));
+    // Exclure les articles de récompense (prix 0 DA, gérés séparément au paiement)
+    const formattedOrder = list
+      .filter(order => !order.isReward)
+      .map(order => ({
+        menu: order.menuId,
+        quantity: order.quantity,
+        solo: order.solo === true,
+        extra: order.extra === true,
+        options: order.steps?.flatMap((s: any) => s.selectedOptions.map((o: any) => ({ step: s.stepId, option: o.optionId }))) || [],
+      }));
     await AsyncStorage.setItem("pendingOrder", JSON.stringify(formattedOrder));
     router.push("/location");
   };
@@ -169,42 +188,62 @@ export default function CartPage() {
         keyExtractor={(_, index) => index.toString()}
         contentContainerStyle={styles.listContent}
         renderItem={({ item, index }) => (
-          <View style={[styles.cartItem, { backgroundColor: theme.cardBgColor }]}>
+          <View style={[
+            styles.cartItem,
+            { backgroundColor: item.isReward ? '#FFF7ED' : theme.cardBgColor },
+            item.isReward && { borderWidth: 1.5, borderColor: '#F97316' },
+          ]}>
             <View style={styles.itemHeader}>
               <View style={{flex: 1}}>
-                <Text style={[styles.itemName, { color: theme.textColor }]}>{item.menuName}</Text>
-                <Text style={styles.itemPriceUnit}>
-                  {calculateMenuPrice(item)} DA {t('cart.unit_price')}
+                <Text style={[styles.itemName, { color: item.isReward ? '#C2410C' : theme.textColor }]}>
+                  {item.menuName}
                 </Text>
+                {item.isReward ? (
+                  <Text style={{ fontSize: 13, color: '#9A3412', marginTop: 2 }}>
+                    ⭐ {item.pointsCost} pts utilisés — Offert
+                  </Text>
+                ) : (
+                  <Text style={styles.itemPriceUnit}>
+                    {calculateMenuPrice(item)} DA {t('cart.unit_price')}
+                  </Text>
+                )}
               </View>
               <TouchableOpacity onPress={() => removeMenu(index)} style={styles.deleteIcon}>
                 <Feather name="trash-2" size={22} color={COLORS.danger} />
               </TouchableOpacity>
             </View>
 
-            <View style={styles.optionsList}>
-              {item.steps?.map((step: any, i: number) => (
-                <View key={i} style={styles.stepRow}>
-                  <Text style={styles.stepName}>{step.stepName} : </Text>
-                  <Text style={[styles.optionNames, { color: theme.textColor }]}>
-                    {step.selectedOptions.map((o: any) => o.optionName).join(", ")}
-                  </Text>
-                </View>
-              ))}
-            </View>
+            {!item.isReward && (
+              <View style={styles.optionsList}>
+                {item.steps?.map((step: any, i: number) => (
+                  <View key={i} style={styles.stepRow}>
+                    <Text style={styles.stepName}>{step.stepName} : </Text>
+                    <Text style={[styles.optionNames, { color: theme.textColor }]}>
+                      {step.selectedOptions.map((o: any) => o.optionName).join(", ")}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
 
             <View style={styles.itemFooter}>
-              <View style={styles.qtyControls}>
-                <TouchableOpacity style={styles.qtyBtn} onPress={() => changeQuantity(index, -1)}>
-                  <AntDesign name="minus" size={20} color={theme.textColor} />
-                </TouchableOpacity>
-                <Text style={[styles.qtyValue, { color: theme.textColor }]}>{item.quantity}</Text>
-                <TouchableOpacity style={styles.qtyBtn} onPress={() => changeQuantity(index, 1)}>
-                  <AntDesign name="plus" size={20} color={theme.textColor} />
-                </TouchableOpacity>
-              </View>
-              <Text style={[styles.itemTotalPrice, { color: theme.primaryColor }]}>
-                {(calculateMenuPrice(item) * item.quantity).toLocaleString()} DA
+              {item.isReward ? (
+                <Text style={{ fontSize: 13, color: '#9A3412', fontStyle: 'italic' }}>
+                  Retirez de votre panier pour annuler
+                </Text>
+              ) : (
+                <View style={styles.qtyControls}>
+                  <TouchableOpacity style={styles.qtyBtn} onPress={() => changeQuantity(index, -1)}>
+                    <AntDesign name="minus" size={20} color={theme.textColor} />
+                  </TouchableOpacity>
+                  <Text style={[styles.qtyValue, { color: theme.textColor }]}>{item.quantity}</Text>
+                  <TouchableOpacity style={styles.qtyBtn} onPress={() => changeQuantity(index, 1)}>
+                    <AntDesign name="plus" size={20} color={theme.textColor} />
+                  </TouchableOpacity>
+                </View>
+              )}
+              <Text style={[styles.itemTotalPrice, { color: item.isReward ? '#F97316' : theme.primaryColor }]}>
+                {item.isReward ? '0 DA' : `${(calculateMenuPrice(item) * item.quantity).toLocaleString()} DA`}
               </Text>
             </View>
           </View>

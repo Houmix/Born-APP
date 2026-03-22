@@ -117,7 +117,7 @@ export default function MenuScreen() {
   // Annuler la commande → retour à l'accueil (screensaver)
   const handleCancelOrder = async () => {
     try {
-      await AsyncStorage.multiRemove(["orderList", "pendingOrder"]);
+      await AsyncStorage.multiRemove(["orderList", "pendingOrder", "pendingRewards"]);
       setIsInactivityModalVisible(false);
       router.replace("/");
     } catch (e) {
@@ -179,19 +179,42 @@ export default function MenuScreen() {
 
   const handleRedeem = async (reward: any) => {
     const phone = await AsyncStorage.getItem("User_phone");
-    if (!phone) return;
+    if (!phone || loyaltyPoints === null || loyaltyPoints < reward.points_required) return;
     setRedeemingId(reward.id);
     try {
-      const restaurantId = getRestaurantId();
-      await axios.post(`${getPosUrl()}/customer/api/loyalty/redeem/`, {
-        identifier: phone,
-        restaurant_id: restaurantId,
-        reward_id: reward.id,
+      const rewardName = reward.display_name || reward.name || 'Récompense';
+
+      // Ajouter la récompense au panier avec prix 0
+      const existingOrders = JSON.parse(await AsyncStorage.getItem("orderList") || "[]");
+      // Éviter d'ajouter 2x la même récompense
+      const alreadyInCart = existingOrders.some((item: any) => item.isReward && item.rewardId === reward.id);
+      if (alreadyInCart) {
+        setRedeemSuccess('Cette récompense est déjà dans votre panier');
+        return;
+      }
+      existingOrders.push({
+        isReward: true,
+        rewardId: reward.id,
+        menuName: `🎁 ${rewardName}`,
+        price: 0,
+        pointsCost: reward.points_required,
+        quantity: 1,
+        steps: [],
       });
+      await AsyncStorage.setItem("orderList", JSON.stringify(existingOrders));
+
+      // Stocker dans pendingRewards pour être utilisé au paiement
+      const pendingRaw = await AsyncStorage.getItem("pendingRewards");
+      const pending = pendingRaw ? JSON.parse(pendingRaw) : [];
+      pending.push({ rewardId: reward.id, pointsCost: reward.points_required, rewardName });
+      await AsyncStorage.setItem("pendingRewards", JSON.stringify(pending));
+
+      // Mise à jour optimiste de l'affichage
       setLoyaltyPoints(prev => prev !== null ? prev - reward.points_required : null);
-      setRedeemSuccess(`"${reward.name}" utilisée avec succès !`);
+      await updateCartCount();
+      setRedeemSuccess(`🎁 "${rewardName}" ajoutée au panier (0 DA) !`);
     } catch {
-      setRedeemSuccess('Erreur lors de l\'échange');
+      setRedeemSuccess("Erreur lors de l'ajout de la récompense");
     } finally {
       setRedeemingId(null);
     }
