@@ -4,6 +4,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useEffect, useState } from "react";
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useKioskTheme } from '@/contexts/KioskThemeContext';
 
 const { width } = Dimensions.get('window');
 const isTablet = width > 600;
@@ -18,6 +19,7 @@ const KEYBOARD_ROWS = [
 export default function LocationScreen() {
     const router = useRouter();
     const { t, isRTL } = useLanguage();
+    const theme = useKioskTheme();
     const [errorMessage, setErrorMessage] = useState("");
     const [customerIdentifier, setCustomerIdentifier] = useState("");
 
@@ -28,6 +30,15 @@ export default function LocationScreen() {
         };
         check();
     }, []);
+
+    // Auto-redirect si le mode ne permet qu'un seul type de livraison
+    useEffect(() => {
+        if (theme.deliveryModes === 'sur_place_only') {
+            selectLocation('sur_place');
+        } else if (theme.deliveryModes === 'emporter_only') {
+            selectLocation('emporter');
+        }
+    }, [theme.deliveryModes]);
 
     const handleKey = (key: string) => {
         if (key === '⌫') {
@@ -97,17 +108,21 @@ export default function LocationScreen() {
                 </View>
             </View>
 
-            {/* Boutons sur place / emporter */}
+            {/* Boutons sur place / emporter (selon le mode configuré) */}
             <View style={[styles.container, isTablet ? styles.rowLayout : styles.colLayout]}>
-                <TouchableOpacity style={styles.box} onPress={() => selectLocation('sur_place')}>
-                    <Text style={styles.text}>{t('location.eat_in')}</Text>
-                    <MaterialIcons name="table-restaurant" size={isTablet ? 140 : 90} color="#0056b3" />
-                </TouchableOpacity>
+                {theme.deliveryModes !== 'emporter_only' && (
+                    <TouchableOpacity style={styles.box} onPress={() => selectLocation('sur_place')}>
+                        <Text style={styles.text}>{t('location.eat_in')}</Text>
+                        <MaterialIcons name="table-restaurant" size={isTablet ? 140 : 90} color="#0056b3" />
+                    </TouchableOpacity>
+                )}
 
-                <TouchableOpacity style={styles.box} onPress={() => selectLocation('emporter')}>
-                    <Text style={styles.text}>{t('location.takeaway')}</Text>
-                    <MaterialIcons name="food-bank" size={isTablet ? 140 : 90} color="#0056b3" />
-                </TouchableOpacity>
+                {theme.deliveryModes !== 'sur_place_only' && (
+                    <TouchableOpacity style={styles.box} onPress={() => selectLocation('emporter')}>
+                        <Text style={styles.text}>{t('location.takeaway')}</Text>
+                        <MaterialIcons name="food-bank" size={isTablet ? 140 : 90} color="#0056b3" />
+                    </TouchableOpacity>
+                )}
             </View>
 
             {errorMessage ? (

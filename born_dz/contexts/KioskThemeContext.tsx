@@ -27,6 +27,12 @@ export interface KioskTheme {
     compositionMode: 'modal' | 'page';
     loyaltyEnabled: boolean;
     loyaltyPointsRate: number;
+    categoryDisplayMode: 'sidebar' | 'grid_macdo';
+    tvaRate: number;
+    ticketHeader: string;
+    ticketFooter: string;
+    ticketShowTva: boolean;
+    deliveryModes: 'both' | 'sur_place_only' | 'emporter_only';
 }
 
 const DEFAULT_THEME: KioskTheme = {
@@ -48,6 +54,12 @@ const DEFAULT_THEME: KioskTheme = {
     compositionMode: 'page',
     loyaltyEnabled: false,
     loyaltyPointsRate: 10,
+    categoryDisplayMode: 'sidebar',
+    tvaRate: 0,
+    ticketHeader: '',
+    ticketFooter: '',
+    ticketShowTva: false,
+    deliveryModes: 'both',
 };
 
 const THEME_CACHE_KEY = 'kiosk_theme_cache';
@@ -97,6 +109,12 @@ export function KioskThemeProvider({ children }: { children: React.ReactNode }) 
                 compositionMode:    (data.composition_mode as 'modal' | 'page') || 'page',
                 loyaltyEnabled:     data.loyalty_enabled ?? false,
                 loyaltyPointsRate:  data.loyalty_points_rate ?? 10,
+                categoryDisplayMode: (data.category_display_mode as 'sidebar' | 'grid_macdo') || 'sidebar',
+                tvaRate:            parseFloat(data.tva_rate) || 0,
+                ticketHeader:       data.ticket_header || '',
+                ticketFooter:       data.ticket_footer || '',
+                ticketShowTva:      data.ticket_show_tva ?? false,
+                deliveryModes:      (data.delivery_modes as 'both' | 'sur_place_only' | 'emporter_only') || 'both',
             };
             setTheme(newTheme);
             await AsyncStorage.setItem(cacheKey, JSON.stringify(newTheme));

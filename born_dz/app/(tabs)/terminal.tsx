@@ -510,6 +510,8 @@ export default function MenuScreen() {
       ? { uri: item.photo_url }
       : require('@/assets/logo.png');
     const displayPrice = getDisplayPrice(item);
+    const hasPromo = item.promo_price != null && parseFloat(item.promo_price) > 0;
+    const promoDisplayPrice = hasPromo ? `${item.promo_price}` : null;
     const style = theme.cardStyle || 'gradient';
 
     if (style === 'macdo') {
@@ -526,7 +528,10 @@ export default function MenuScreen() {
           <View style={{ flex: 4, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 10, justifyContent: 'space-between', backgroundColor: theme.cardBgColor }}>
             <Text style={{ color: theme.textColor, fontWeight: '700', fontSize: 13, lineHeight: 18 }} numberOfLines={2}>{item.name}</Text>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ color: theme.secondaryColor, fontSize: 16, fontWeight: '900' }}>{displayPrice} DA</Text>
+              <View>
+                {hasPromo && <Text style={{ color: '#94a3b8', fontSize: 12, textDecorationLine: 'line-through' }}>{displayPrice} DA</Text>}
+                <Text style={{ color: hasPromo ? '#ef4444' : theme.secondaryColor, fontSize: 16, fontWeight: '900' }}>{hasPromo ? promoDisplayPrice : displayPrice} DA</Text>
+              </View>
               <View style={[styles.addButton, { backgroundColor: theme.secondaryColor }]}>
                 <Feather name="plus" size={18} color="white" />
               </View>
@@ -549,8 +554,9 @@ export default function MenuScreen() {
             <Text style={{ color: 'white', fontWeight: '700', fontSize: 13 }} numberOfLines={1}>{item.name}</Text>
           </View>
           <View style={{ position: 'absolute', bottom: 12, left: 10, right: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View style={{ backgroundColor: theme.secondaryColor, borderRadius: 100, paddingVertical: 7, paddingHorizontal: 14 }}>
-              <Text style={{ color: 'white', fontWeight: '900', fontSize: 15 }}>{displayPrice} DA</Text>
+            <View style={{ backgroundColor: hasPromo ? '#ef4444' : theme.secondaryColor, borderRadius: 100, paddingVertical: 4, paddingHorizontal: 12 }}>
+              {hasPromo && <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 10, textDecorationLine: 'line-through' }}>{displayPrice} DA</Text>}
+              <Text style={{ color: 'white', fontWeight: '900', fontSize: 15 }}>{hasPromo ? promoDisplayPrice : displayPrice} DA</Text>
             </View>
             <View style={{ backgroundColor: 'white', width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }}>
               <Feather name="plus" size={20} color={theme.primaryColor} />
@@ -613,8 +619,42 @@ export default function MenuScreen() {
       {/* Contenu principal */}
       <View style={styles.content}>
 
-        {/* Sidebar catégories */}
-        <ScrollView
+        {/* ── Mode Grille McDonald's : catégories plein écran ── */}
+        {theme.categoryDisplayMode === 'grid_macdo' && !selectedCategory && (
+          <ScrollView contentContainerStyle={styles.macdoCategoryGrid}>
+            {categories.filter(c => c.avalaible).map(category => (
+              <TouchableOpacity
+                key={category.id}
+                style={styles.macdoCategoryCard}
+                onPress={() => setSelectedCategory(category)}
+                activeOpacity={0.85}
+              >
+                {category.photo_url ? (
+                  <Image source={{ uri: category.photo_url }} style={styles.macdoCategoryImage} resizeMode="contain" />
+                ) : (
+                  <View style={[styles.macdoCategoryImage, { backgroundColor: theme.primaryColor + '22', justifyContent: 'center', alignItems: 'center' }]}>
+                    <Text style={{ fontSize: 40 }}>🍽️</Text>
+                  </View>
+                )}
+                <Text style={[styles.macdoCategoryLabel, { color: theme.textColor }]} numberOfLines={2}>{category.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
+        {/* ── Mode Grille McDonald's : retour catégories quand une est sélectionnée ── */}
+        {theme.categoryDisplayMode === 'grid_macdo' && selectedCategory && (
+          <TouchableOpacity
+            onPress={() => setSelectedCategory(null)}
+            style={[styles.macdoBackBtn, { backgroundColor: theme.primaryColor }]}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.macdoBackBtnText}>← {selectedCategory.name}</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Sidebar catégories (mode classique seulement) */}
+        {theme.categoryDisplayMode !== 'grid_macdo' && <ScrollView
           style={[styles.sidebar, { width: sidebarWidth, backgroundColor: theme.sidebarColor }]}
           contentContainerStyle={styles.sidebarContent}
         >
@@ -671,10 +711,10 @@ export default function MenuScreen() {
               </Text>
             </TouchableOpacity>
           )}
-        </ScrollView>
+        </ScrollView>}
 
-        {/* Grille des menus OU panneau fidélité */}
-        <View style={[styles.menuGridContainer, { width: `${menuGridWidth}%` }]}>
+        {/* Grille des menus OU panneau fidélité — masquée en mode grid_macdo sans catégorie sélectionnée */}
+        {(theme.categoryDisplayMode !== 'grid_macdo' || selectedCategory) && <View style={[styles.menuGridContainer, { width: theme.categoryDisplayMode === 'grid_macdo' ? '100%' : `${menuGridWidth}%` }]}>
           {selectedCategory?.id === LOYALTY_TAB ? (
             /* ── Panneau Fidélité ── */
             <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
@@ -774,7 +814,7 @@ export default function MenuScreen() {
               contentContainerStyle={styles.menuGrid}
             />
           )}
-        </View>
+        </View>}
       </View>
 
       <ChoiceModal />
@@ -877,6 +917,26 @@ export default function MenuScreen() {
 }
 
 const styles = StyleSheet.create({
+  // ── Mode Grille McDonald's ──────────────────────────────────────────────
+  macdoCategoryGrid: {
+    flexDirection: 'row', flexWrap: 'wrap', padding: 20, gap: 16,
+    justifyContent: 'center',
+  },
+  macdoCategoryCard: {
+    width: 180, alignItems: 'center', backgroundColor: 'white',
+    borderRadius: 16, padding: 16, elevation: 3,
+    shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8,
+  },
+  macdoCategoryImage: { width: 140, height: 140, borderRadius: 12, marginBottom: 10 },
+  macdoCategoryLabel: {
+    fontSize: 16, fontWeight: '800', textAlign: 'center', textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  macdoBackBtn: {
+    paddingHorizontal: 20, paddingVertical: 10, margin: 10, borderRadius: 10, alignSelf: 'flex-start',
+  },
+  macdoBackBtnText: { color: 'white', fontWeight: '700', fontSize: 16 },
+
   logoImage: { width: 220, height: 80 },
   container: { flex: 1, backgroundColor: "#F8F9FA" },   // surchargé inline
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },

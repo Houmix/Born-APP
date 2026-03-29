@@ -1,9 +1,10 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { execSync } = require('child_process');
 const express = require('express');
+const { autoUpdater } = require('electron-updater');
 
 // Imprimantes virtuelles à exclure (pas de port physique)
 const VIRTUAL_PRINTER_KEYWORDS = ['PDF', 'Fax', 'OneNote', 'XPS', 'Microsoft', 'Send to', 'Cloud'];
@@ -238,7 +239,31 @@ async function printToComPorts(dataBuffer) {
     return results;
 }
 
-ipcMain.handle("printTicket", async (event, ticketText) => {
+/**
+ * Génère les commandes ESC/POS pour imprimer un QR code (modèle 2)
+ */
+function buildQRCodeCommands(data) {
+    if (!data || data.trim().length === 0) return Buffer.alloc(0);
+    const dataBytes = Buffer.from(data.trim(), 'utf8');
+    const storeLen = dataBytes.length + 3;
+    const pL = storeLen & 0xFF;
+    const pH = (storeLen >> 8) & 0xFF;
+
+    return Buffer.concat([
+        Buffer.from('\n'),                                                          // ligne vide avant
+        Buffer.from([0x1B, 0x61, 0x01]),                                           // alignement centré
+        Buffer.from([0x1D, 0x28, 0x6B, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00]),     // modèle 2
+        Buffer.from([0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x43, 0x06]),           // taille module 6
+        Buffer.from([0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x45, 0x31]),           // correction M
+        Buffer.from([0x1D, 0x28, 0x6B, pL,   pH,   0x31, 0x50, 0x30]),           // stocker données
+        dataBytes,
+        Buffer.from([0x1D, 0x28, 0x6B, 0x03, 0x00, 0x31, 0x51, 0x30]),           // imprimer QR
+        Buffer.from([0x1B, 0x61, 0x00]),                                           // retour alignement gauche
+        Buffer.from('\n'),                                                          // ligne vide après
+    ]);
+}
+
+ipcMain.handle("printTicket", async (event, ticketText, qrContent) => {
     const tempFilePath = path.join(os.tmpdir(), `ticket-${Date.now()}.bin`);
 
     try {
@@ -250,21 +275,22 @@ ipcMain.handle("printTicket", async (event, ticketText) => {
 
         const INIT          = ESC + '@';                    // Reset imprimante
         const MARGIN_LEFT_0 = GS + 'L' + '\x00' + '\x00'; // Marge gauche = 0
-        // GS W absent volontairement : largeur pleine par défaut selon le modèle
         const ALIGN_LEFT    = ESC + 'a' + '\x00';          // Alignement gauche
         const FONT_NORMAL   = ESC + '!' + '\x00';          // Police normale (Font A)
         const LINE_SPACING  = ESC + '3' + '\x12';          // Interligne serré
         const LINE_FEEDS    = '\n\n\n\n\n';                // Espace avant coupe
         const CUT_COMMAND   = GS + 'V' + '\x42' + '\x00'; // Coupe complète
 
-        const fullContent = INIT
-            + MARGIN_LEFT_0
-            + ALIGN_LEFT
-            + FONT_NORMAL
-            + LINE_SPACING
-            + ticketText
-            + LINE_FEEDS
-            + CUT_COMMAND;
+        // ── 2. Assemblage (ticket + QR code optionnel) en Buffer ──
+        const headerBuf = Buffer.from(INIT + MARGIN_LEFT_0 + ALIGN_LEFT + FONT_NORMAL + LINE_SPACING, 'latin1');
+        const ticketBuf = Buffer.from(ticketText, 'latin1');
+        const qrBuf     = buildQRCodeCommands(qrContent || '');
+        const footerBuf = Buffer.from(LINE_FEEDS + CUT_COMMAND, 'latin1');
+
+        const fullContentBuf = Buffer.concat([headerBuf, ticketBuf, qrBuf, footerBuf]);
+
+        // Rétro-compat : la suite du code utilise encore fullContent comme string latin1
+        const fullContent = fullContentBuf.toString('latin1');
 
         // ── 2. Écriture fichier binaire (latin1 préserve les octets ESC/POS) ──
         fs.writeFileSync(tempFilePath, fullContent, { encoding: 'latin1' });
@@ -290,7 +316,7 @@ ipcMain.handle("printTicket", async (event, ticketText) => {
 
         console.log(`[Impression] ${physicalPrinters.length} imprimante(s) : ${physicalPrinters.map(p => p.name).join(', ')}`);
 
-        // ── 4. Envoi RAW via winspool.drv (PowerShell) ──
+        // ── 4. Envoi RAW via winspool.drv (PowerShell) — s'arrête dès le premier succès ──
         const results = [];
 
         for (const printer of physicalPrinters) {
@@ -312,6 +338,7 @@ ipcMain.handle("printTicket", async (event, ticketText) => {
                 if (output === 'True') {
                     console.log(`[Impression] OK "${printerName}"`);
                     results.push({ printer: printerName, status: 'success' });
+                    break; // ✅ Un seul ticket : on s'arrête après le premier succès
                 } else {
                     throw new Error(`WritePrinter a retourné: ${output}`);
                 }
@@ -327,7 +354,11 @@ ipcMain.handle("printTicket", async (event, ticketText) => {
             console.log('[Impression] Spooler sans succès → scan ports COM...');
             const dataBuffer = Buffer.from(fullContent, 'latin1');
             const comResults = await printToComPorts(dataBuffer);
-            results.push(...comResults);
+            // Aussi s'arrêter au premier succès COM
+            for (const r of comResults) {
+                results.push(r);
+                if (r.status === 'success') break;
+            }
         }
 
         // ── 6. Nettoyage ──
@@ -348,10 +379,54 @@ ipcMain.handle("printTicket", async (event, ticketText) => {
 });
 
 // ==========================================
+// 🔄 MISE À JOUR AUTOMATIQUE
+// ==========================================
+function setupAutoUpdater() {
+    autoUpdater.autoDownload = true;       // Téléchargement silencieux en arrière-plan
+    autoUpdater.autoInstallOnAppQuit = true; // Installe à la fermeture
+
+    autoUpdater.on('update-available', (info) => {
+        console.log(`[Updater] Nouvelle version disponible : ${info.version}`);
+        // Notifier l'interface (optionnel)
+        if (mainWindow) {
+            mainWindow.webContents.send('update-available', info.version);
+        }
+    });
+
+    autoUpdater.on('update-downloaded', (info) => {
+        console.log(`[Updater] Version ${info.version} téléchargée.`);
+        dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'Mise à jour disponible',
+            message: `La version ${info.version} de ClickGo Borne est prête.\nCliquez sur OK pour installer et redémarrer.`,
+            buttons: ['Installer maintenant', 'Plus tard'],
+            defaultId: 0,
+        }).then(({ response }) => {
+            if (response === 0) autoUpdater.quitAndInstall();
+        });
+    });
+
+    autoUpdater.on('error', (err) => {
+        console.error('[Updater] Erreur mise à jour:', err.message);
+    });
+
+    // Vérifier au démarrage (délai de 10s pour laisser l'app s'initialiser)
+    setTimeout(() => {
+        if (app.isPackaged) autoUpdater.checkForUpdates();
+    }, 10000);
+
+    // Revérifier toutes les 4 heures
+    setInterval(() => {
+        if (app.isPackaged) autoUpdater.checkForUpdates();
+    }, 4 * 60 * 60 * 1000);
+}
+
+// ==========================================
 // 🚀 INITIALISATION
 // ==========================================
 app.whenReady().then(async () => {
     await createWindow();
+    setupAutoUpdater();
 });
 
 app.on('window-all-closed', () => {

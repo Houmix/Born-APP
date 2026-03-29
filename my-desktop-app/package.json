@@ -13,6 +13,13 @@
     "appId": "com.doeat.borne",
     "productName": "ClickGo Borne",
     "asar": true,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "VOTRE_COMPTE_GITHUB",
+        "repo": "clickgo-borne-releases"
+      }
+    ],
     "win": {
       "target": "nsis"
     },
@@ -37,6 +44,7 @@
     ]
   },
   "dependencies": {
+    "electron-updater": "^6.3.9",
     "escpos-serialport": "^3.0.0-alpha.4",
     "express": "^4.22.1",
     "serialport": "^12.0.0"

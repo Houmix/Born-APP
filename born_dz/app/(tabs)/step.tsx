@@ -138,11 +138,16 @@ export default function MenuStepsScreen() {
                 </View>
             </View>
 
-            {/* Barre de progression visuelle */}
-            <View style={styles.progressContainer}>
-                {steps.map((_, i) => (
-                    <View key={i} style={[styles.progressBar, i <= currentStepIndex ? { backgroundColor: theme.primaryColor } : styles.progressInactive]} />
-                ))}
+            {/* Barre de progression visuelle + compteur X/Y */}
+            <View style={styles.progressWrapper}>
+                <View style={styles.progressContainer}>
+                    {steps.map((_, i) => (
+                        <View key={i} style={[styles.progressBar, i <= currentStepIndex ? { backgroundColor: theme.primaryColor } : styles.progressInactive]} />
+                    ))}
+                </View>
+                <View style={[styles.stepCounterBadge, { backgroundColor: theme.primaryColor }]}>
+                    <Text style={styles.stepCounterText}>{currentStepIndex + 1}/{steps.length}</Text>
+                </View>
             </View>
 
             <View style={styles.stepTitleContainer}>
@@ -230,10 +235,13 @@ const styles = StyleSheet.create({
     priceBadge: { backgroundColor: '#FFF0E6', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20 },
     priceText: { color: COLORS.primary, fontWeight: '800', fontSize: 18 },
 
-    progressContainer: { flexDirection: 'row', paddingHorizontal: 20, gap: 8, marginBottom: 10 },
-    progressBar: { flex: 1, height: 6, borderRadius: 3 },
+    progressWrapper: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, gap: 12, marginBottom: 10 },
+    progressContainer: { flex: 1, flexDirection: 'row', gap: 8 },
+    progressBar: { flex: 1, height: 10, borderRadius: 5 },
     progressActive: { backgroundColor: '#888' }, // sera surchargé inline
     progressInactive: { backgroundColor: '#E2E8F0' },
+    stepCounterBadge: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, minWidth: 60, alignItems: 'center' },
+    stepCounterText: { color: 'white', fontWeight: '800', fontSize: 18 },
 
     stepTitleContainer: { paddingHorizontal: 20, marginVertical: 15 },
     stepTitle: { fontSize: 26, fontWeight: '800', color: COLORS.text },
