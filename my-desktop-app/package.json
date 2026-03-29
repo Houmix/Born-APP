@@ -16,12 +16,14 @@
     "publish": [
       {
         "provider": "github",
-        "owner": "VOTRE_COMPTE_GITHUB",
-        "repo": "clickgo-borne-releases"
+        "owner": "Houmix",
+        "repo": "Born-APP"
       }
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico",
+      "artifactName": "ClickGo-Borne-Setup.exe"
     },
     "nsis": {
       "oneClick": false,
