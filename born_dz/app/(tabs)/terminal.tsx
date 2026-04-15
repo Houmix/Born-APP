@@ -976,7 +976,7 @@ const styles = StyleSheet.create({
   menuGrid: { justifyContent: "flex-start", alignItems: "flex-start" },
   menuItem: {
     aspectRatio: 0.72, borderRadius: 22, overflow: 'hidden',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#ffffff',
     shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12,
     elevation: 6, marginBottom: 16,
   },
