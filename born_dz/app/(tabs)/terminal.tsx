@@ -522,8 +522,8 @@ export default function MenuScreen() {
           onPress={() => handleAddToCart(item)}
           activeOpacity={0.85}
         >
-          <View style={{ flex: 6, overflow: 'hidden', backgroundColor: 'white' }}>
-            <Image source={imageSource} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+          <View style={{ flex: 6, overflow: 'hidden', backgroundColor: '#f8fafc', padding: 12, alignItems: 'center', justifyContent: 'center' }}>
+            <Image source={imageSource} style={{ width: '100%', height: '100%', borderRadius: 12 }} resizeMode="contain" />
           </View>
           <View style={{ flex: 4, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 10, justifyContent: 'space-between', backgroundColor: theme.cardBgColor }}>
             <Text style={{ color: theme.textColor, fontWeight: '700', fontSize: 13, lineHeight: 18 }} numberOfLines={2}>{item.name}</Text>
@@ -672,6 +672,7 @@ export default function MenuScreen() {
                 <Image
                   source={{ uri: category.photo_url }}
                   style={styles.categoryImage}
+                  resizeMode="contain"
                 />
               )}
               <Text style={[
@@ -961,15 +962,15 @@ const styles = StyleSheet.create({
   sidebar: { elevation: 5 },
   sidebarContent: { paddingVertical: 20, alignItems: "center" },
   categoryButton: {
-    borderRadius: 10, padding: 10, width: "85%", marginBottom: 5, alignItems: "center",
-    backgroundColor: "transparent", minHeight: 90, justifyContent: 'center',
+    borderRadius: 14, padding: 10, width: "88%", marginBottom: 8, alignItems: "center",
+    backgroundColor: "transparent", minHeight: 80, justifyContent: 'center',
   },
   selectedCategory: {
     backgroundColor: "#334155", borderLeftWidth: 4,
   },
   selectedCategoryText: { fontWeight: '700' },
-  categoryImage: { width: "100%", height: 130, marginBottom: 10, borderRadius: 10, backgroundColor: 'white' },
-  categoryText: { fontSize: 15, fontWeight: "600", textAlign: "center" },
+  categoryImage: { width: "85%", height: 90, marginBottom: 8, borderRadius: 12, backgroundColor: '#f8fafc', resizeMode: 'contain' as any },
+  categoryText: { fontSize: 13, fontWeight: "600", textAlign: "center" },
 
   menuGridContainer: { padding: 15 },
   menuGrid: { justifyContent: "flex-start", alignItems: "flex-start" },
