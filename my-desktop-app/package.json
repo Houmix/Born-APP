@@ -1,5 +1,5 @@
 {
-  "name": "do-eat-borne",
+  "name": "clickgo-borne",
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
@@ -10,7 +10,7 @@
     "dist": "npm run build:web && electron-builder"
   },
   "build": {
-    "appId": "com.doeat.borne",
+    "appId": "com.clickgo.borne",
     "productName": "ClickGo Borne",
     "asar": true,
     "publish": [
