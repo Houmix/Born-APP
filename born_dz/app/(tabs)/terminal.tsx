@@ -520,20 +520,35 @@ export default function MenuScreen() {
           key={item.id}
           style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2, backgroundColor: theme.cardBgColor }]}
           onPress={() => handleAddToCart(item)}
-          activeOpacity={0.85}
+          activeOpacity={0.88}
         >
-          <View style={{ flex: 6, overflow: 'hidden', backgroundColor: '#f8fafc', padding: 12, alignItems: 'center', justifyContent: 'center' }}>
-            <Image source={imageSource} style={{ width: '100%', height: '100%', borderRadius: 12 }} resizeMode="contain" />
+          {/* Zone image — fond dégradé subtil + ombre portée sur le produit */}
+          <View style={{
+            flex: 6, overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
+            backgroundColor: '#f1f5f9',
+            paddingHorizontal: 16, paddingVertical: 14,
+          }}>
+            <View style={{
+              width: '88%', height: '88%',
+              shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 14, elevation: 8,
+            }}>
+              <Image source={imageSource} style={{ width: '100%', height: '100%', borderRadius: 14 }} resizeMode="contain" />
+            </View>
           </View>
-          <View style={{ flex: 4, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 10, justifyContent: 'space-between', backgroundColor: theme.cardBgColor }}>
-            <Text style={{ color: theme.textColor, fontWeight: '700', fontSize: 13, lineHeight: 18 }} numberOfLines={2}>{item.name}</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          {/* Zone texte — séparation nette */}
+          <View style={{
+            flex: 4, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12,
+            justifyContent: 'space-between', backgroundColor: theme.cardBgColor,
+            borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.04)',
+          }}>
+            <Text style={{ color: theme.textColor, fontWeight: '800', fontSize: 14, lineHeight: 20 }} numberOfLines={2}>{item.name}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
               <View>
-                {hasPromo && <Text style={{ color: '#94a3b8', fontSize: 12, textDecorationLine: 'line-through' }}>{displayPrice} DA</Text>}
-                <Text style={{ color: hasPromo ? '#ef4444' : theme.secondaryColor, fontSize: 16, fontWeight: '900' }}>{hasPromo ? promoDisplayPrice : displayPrice} DA</Text>
+                {hasPromo && <Text style={{ color: '#94a3b8', fontSize: 11, textDecorationLine: 'line-through' }}>{displayPrice} DA</Text>}
+                <Text style={{ color: hasPromo ? '#ef4444' : theme.secondaryColor, fontSize: 17, fontWeight: '900' }}>{hasPromo ? promoDisplayPrice : displayPrice} DA</Text>
               </View>
-              <View style={[styles.addButton, { backgroundColor: theme.secondaryColor }]}>
-                <Feather name="plus" size={18} color="white" />
+              <View style={[styles.addButton, { backgroundColor: theme.secondaryColor, width: 42, height: 42, borderRadius: 21 }]}>
+                <Feather name="plus" size={20} color="white" />
               </View>
             </View>
           </View>
@@ -977,8 +992,9 @@ const styles = StyleSheet.create({
   menuItem: {
     aspectRatio: 0.72, borderRadius: 22, overflow: 'hidden',
     backgroundColor: '#ffffff',
-    shadowColor: "#000", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 12,
-    elevation: 6, marginBottom: 16,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 16,
+    elevation: 8, marginBottom: 16,
+    borderWidth: 1, borderColor: 'rgba(0,0,0,0.04)',
   },
   menuOverlay: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
