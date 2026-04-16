@@ -396,11 +396,13 @@ export default function MenuScreen() {
         >
           <TouchableOpacity activeOpacity={1} style={modalStyles.productCard}>
             {selectedItemForModal.photo_url && (
-              <Image
-                source={{ uri: selectedItemForModal.photo_url }}
-                style={modalStyles.productImageFull}
-                resizeMode="cover"
-              />
+              <View style={modalStyles.productImageWrap}>
+                <Image
+                  source={{ uri: selectedItemForModal.photo_url }}
+                  style={modalStyles.productImageFull}
+                  resizeMode="contain"
+                />
+              </View>
             )}
 
             <View style={modalStyles.productDetails}>
@@ -522,15 +524,14 @@ export default function MenuScreen() {
           onPress={() => handleAddToCart(item)}
           activeOpacity={0.88}
         >
-          {/* Zone image — fond dégradé subtil + ombre portée sur le produit */}
+          {/* Zone image — fond blanc uni pour un rendu homogène */}
           <View style={{
             flex: 6, overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
-            backgroundColor: '#f1f5f9',
+            backgroundColor: '#ffffff',
             paddingHorizontal: 16, paddingVertical: 14,
           }}>
             <View style={{
               width: '88%', height: '88%',
-              shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 14, elevation: 8,
             }}>
               <Image source={imageSource} style={{ width: '100%', height: '100%', borderRadius: 14 }} resizeMode="contain" />
             </View>
@@ -581,24 +582,40 @@ export default function MenuScreen() {
       );
     }
 
-    // gradient (défaut)
+    // gradient (défaut) — carte compacte : image contain sur fond blanc, texte/prix/+ dans la bande basse
     return (
       <TouchableOpacity
         key={item.id}
-        style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2, backgroundColor: 'white' }]}
+        style={[styles.menuItem, { width: itemWidth, margin: itemMargin / 2, backgroundColor: theme.cardBgColor || '#ffffff' }]}
         onPress={() => handleAddToCart(item)}
         activeOpacity={0.85}
       >
-        <Image source={imageSource} style={StyleSheet.absoluteFill} resizeMode="contain" />
-        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.82)']} style={styles.menuOverlay}>
-          <Text style={styles.menuText} numberOfLines={2}>{item.name}</Text>
-          <View style={styles.priceActionContainer}>
-            <Text style={[styles.menuPrice, { color: theme.secondaryColor }]}>{displayPrice} DA</Text>
-            <View style={[styles.addButton, { backgroundColor: theme.secondaryColor }]}>
+        {/* Zone image — fond blanc uni, ratio 6/10 */}
+        <View style={{
+          flex: 6, alignItems: 'center', justifyContent: 'center',
+          backgroundColor: '#ffffff',
+          paddingHorizontal: 14, paddingVertical: 12,
+        }}>
+          <Image source={imageSource} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+        </View>
+        {/* Zone texte — nom, prix et bouton + */}
+        <View style={{
+          flex: 4, paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12,
+          justifyContent: 'space-between',
+          backgroundColor: theme.cardBgColor || '#ffffff',
+          borderTopWidth: 1, borderTopColor: 'rgba(0,0,0,0.06)',
+        }}>
+          <Text style={{ color: theme.textColor, fontWeight: '800', fontSize: 14, lineHeight: 20 }} numberOfLines={2}>{item.name}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+            <View>
+              {hasPromo && <Text style={{ color: '#94a3b8', fontSize: 11, textDecorationLine: 'line-through' }}>{displayPrice} DA</Text>}
+              <Text style={{ color: hasPromo ? '#ef4444' : theme.secondaryColor, fontSize: 17, fontWeight: '900' }}>{hasPromo ? promoDisplayPrice : displayPrice} DA</Text>
+            </View>
+            <View style={[styles.addButton, { backgroundColor: theme.secondaryColor, width: 42, height: 42, borderRadius: 21 }]}>
               <Feather name="plus" size={20} color="white" />
             </View>
           </View>
-        </LinearGradient>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -781,7 +798,7 @@ export default function MenuScreen() {
                     <View key={reward.id} style={[loyaltyStyles.rewardCard, canRedeem && { borderColor: theme.primaryColor }]}>
                       {/* Image ou icône */}
                       {imgUrl ? (
-                        <Image source={{ uri: imgUrl }} style={loyaltyStyles.rewardImg} resizeMode="cover" />
+                        <Image source={{ uri: imgUrl }} style={loyaltyStyles.rewardImg} resizeMode="contain" />
                       ) : (
                         <View style={loyaltyStyles.rewardIconBox}>
                           <Ionicons name="gift" size={32} color={canRedeem ? theme.primaryColor : '#CBD5E1'} />
@@ -943,7 +960,7 @@ const styles = StyleSheet.create({
     borderRadius: 16, padding: 16, elevation: 3,
     shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8,
   },
-  macdoCategoryImage: { width: 140, height: 140, borderRadius: 12, marginBottom: 10 },
+  macdoCategoryImage: { width: 140, height: 140, borderRadius: 12, marginBottom: 10, backgroundColor: '#ffffff' },
   macdoCategoryLabel: {
     fontSize: 16, fontWeight: '800', textAlign: 'center', textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -984,7 +1001,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#334155", borderLeftWidth: 4,
   },
   selectedCategoryText: { fontWeight: '700' },
-  categoryImage: { width: "85%", height: 90, marginBottom: 8, borderRadius: 12, backgroundColor: '#f8fafc', resizeMode: 'contain' as any },
+  categoryImage: { width: "85%", height: 90, marginBottom: 8, borderRadius: 12, backgroundColor: '#ffffff', resizeMode: 'contain' as any },
   categoryText: { fontSize: 13, fontWeight: "600", textAlign: "center" },
 
   menuGridContainer: { padding: 15 },
@@ -1025,7 +1042,8 @@ const modalStyles = StyleSheet.create({
     overflow: 'hidden', elevation: 20, shadowColor: "#000",
     shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20,
   },
-  productImageFull: { width: '100%', height: 300 },
+  productImageWrap: { width: '100%', height: 300, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', padding: 12 },
+  productImageFull: { width: '100%', height: '100%' },
   productDetails: { padding: 30 },
   modalTitle: { fontSize: 36, fontWeight: "900", color: '#1e293b', marginBottom: 15 },
   descriptionSection: { marginBottom: 40 },
@@ -1080,7 +1098,7 @@ const loyaltyStyles = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#E2E8F0',
     elevation: 2, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8,
   },
-  rewardImg: { width: 64, height: 64, borderRadius: 12 },
+  rewardImg: { width: 64, height: 64, borderRadius: 12, backgroundColor: '#ffffff' },
   rewardIconBox: {
     width: 64, height: 64, borderRadius: 12,
     backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center',
