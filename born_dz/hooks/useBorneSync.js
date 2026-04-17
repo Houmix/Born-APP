@@ -36,9 +36,22 @@ export function useBorneSync() {
     const [restaurantId, setRestaurantId] = useState(null);
 
     // --- 1. CHARGEMENT DES DONNÉES ---
-    const fetchAndCacheAllData = useCallback(async () => {
+    const fetchAndCacheAllData = useCallback(async (forceClean = false) => {
         setIsLoading(true);
         try {
+            // Si forceClean (commande admin "Mettre à jour tout"), vider tout le cache d'abord
+            if (forceClean) {
+                console.log('[SYNC] 🗑️ Nettoyage du cache avant rechargement...');
+                await AsyncStorage.removeItem(GROUP_MENU_KEY);
+                await AsyncStorage.removeItem(MENU_KEY);
+                // Invalider aussi le cache des étapes
+                await AsyncStorage.setItem(STEPS_INVALIDATION_FLAG, 'true');
+                // Supprimer tous les caches d'étapes individuelles
+                const allKeys = await AsyncStorage.getAllKeys();
+                const stepsKeys = allKeys.filter(k => k.startsWith('@steps_menu_'));
+                if (stepsKeys.length > 0) await AsyncStorage.multiRemove(stepsKeys);
+            }
+
             // Essayer en mémoire d'abord, puis AsyncStorage si null
             let currentRestaurantId = getRestaurantId();
             if (!currentRestaurantId) currentRestaurantId = await loadRestaurantId();
@@ -54,8 +67,8 @@ export function useBorneSync() {
             const headers = { Authorization: `Bearer ${accessToken}` };
 
             const [catResp, menuResp] = await Promise.all([
-                axios.get(`${getPosUrl()}/menu/api/getGroupMenuList/${currentRestaurantId}/`, { headers }),
-                axios.get(`${getPosUrl()}/menu/api/getAllMenu/${currentRestaurantId}/`, { headers }),
+                axios.get(`${getPosUrl()}/menu/api/getGroupMenuList/${currentRestaurantId}/`, { headers, timeout: 10000 }),
+                axios.get(`${getPosUrl()}/menu/api/getAllMenu/${currentRestaurantId}/`, { headers, timeout: 10000 }),
             ]);
 
             const availableCategories = catResp.data.filter(c => c.avalaible);
@@ -65,7 +78,7 @@ export function useBorneSync() {
             await AsyncStorage.setItem(GROUP_MENU_KEY, JSON.stringify(availableCategories));
             await AsyncStorage.setItem(MENU_KEY, JSON.stringify(menuResp.data));
 
-            console.log('[SYNC] ✅ Données rechargées');
+            console.log('[SYNC] ✅ Données rechargées depuis le serveur');
         } catch (error) {
             console.error('[SYNC] Échec rechargement:', error.message);
         } finally {
@@ -73,23 +86,29 @@ export function useBorneSync() {
         }
     }, []);
 
-    // --- 2. CHARGEMENT INITIAL DEPUIS LE CACHE ---
+    // --- 2. CHARGEMENT INITIAL : serveur d'abord, cache en fallback ---
     const loadDataFromCache = useCallback(async () => {
         setIsLoading(true);
 
         const currentRestaurantId = getRestaurantId();
         if (currentRestaurantId) setRestaurantId(currentRestaurantId);
 
-        const cachedCategories = await AsyncStorage.getItem(GROUP_MENU_KEY);
-        const cachedMenus = await AsyncStorage.getItem(MENU_KEY);
+        // Tenter le fetch serveur en priorité (le serveur est la source de vérité)
+        try {
+            await fetchAndCacheAllData();
+            console.log('[INIT] ✅ Données chargées depuis le serveur');
+        } catch {
+            // Si le serveur est injoignable, utiliser le cache comme fallback
+            const cachedCategories = await AsyncStorage.getItem(GROUP_MENU_KEY);
+            const cachedMenus = await AsyncStorage.getItem(MENU_KEY);
 
-        if (cachedCategories && cachedMenus) {
-            setCategories(JSON.parse(cachedCategories));
-            setMenus(JSON.parse(cachedMenus));
-            console.log('[CACHE] ✅ Données chargées depuis le cache');
+            if (cachedCategories && cachedMenus) {
+                setCategories(JSON.parse(cachedCategories));
+                setMenus(JSON.parse(cachedMenus));
+                console.log('[INIT] ⚠️ Serveur inaccessible — données cache utilisées');
+            }
+            setIsLoading(false);
         }
-
-        await fetchAndCacheAllData();
     }, [fetchAndCacheAllData]);
 
     // --- 3. GESTION DES ÉTAPES ---

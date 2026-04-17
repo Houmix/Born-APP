@@ -40,12 +40,12 @@ export function BorneSyncProvider({ children }: { children: React.ReactNode }) {
             }
 
             if (status === 'full_sync_required') {
-                console.log('[BorneSync] 🔄 Sync complète demandée');
+                console.log('[BorneSync] 🔄 Sync complète demandée — nettoyage cache');
                 await AsyncStorage.setItem(STEPS_INVALIDATION_FLAG, 'true');
                 // Rafraîchir aussi le thème (menu admin peut modifier le thème en même temps)
                 themeUpdateListeners.forEach(cb => { try { cb(); } catch {} });
-                // Rafraîchir les menus si terminal.tsx est actif
-                menuRefreshListeners.forEach(cb => { try { cb(); } catch {} });
+                // Rafraîchir les menus avec nettoyage du cache
+                menuRefreshListeners.forEach(cb => { try { cb(true); } catch {} });
             }
         } catch (e) {
             console.error('[BorneSync] Erreur traitement message WS:', e);
@@ -91,9 +91,18 @@ export function BorneSyncProvider({ children }: { children: React.ReactNode }) {
                 const { command } = msg;
 
                 if (command === 'update_images' || command === 'update_all') {
+                    console.log(`[BorneCtrl] 🔄 Commande "${command}" reçue — nettoyage cache + rechargement`);
                     await AsyncStorage.setItem(STEPS_INVALIDATION_FLAG, 'true');
-                    menuRefreshListeners.forEach(cb => { try { cb(); } catch {} });
+                    // Passer forceClean=true pour vider le cache avant de recharger
+                    menuRefreshListeners.forEach(cb => { try { cb(true); } catch {} });
                     themeUpdateListeners.forEach(cb => { try { cb(); } catch {} });
+                } else if (command === 'reset_data') {
+                    console.log('[BorneCtrl] 🗑️ Réinitialisation des données locales');
+                    await AsyncStorage.clear();
+                    Alert.alert(
+                        'Données réinitialisées',
+                        'Toutes les données locales ont été supprimées. Veuillez relancer l\'application.',
+                    );
                 } else if (command === 'reboot') {
                     // Sur Android, on ne peut pas redémarrer directement — on alerte
                     Alert.alert('Redémarrage', 'Veuillez relancer l\'application manuellement.');

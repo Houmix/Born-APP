@@ -33,6 +33,8 @@ export interface KioskTheme {
     ticketFooter: string;
     ticketShowTva: boolean;
     deliveryModes: 'both' | 'sur_place_only' | 'emporter_only';
+    showRefreshButton: boolean;
+    showInlineCart: boolean;
 }
 
 const DEFAULT_THEME: KioskTheme = {
@@ -60,6 +62,8 @@ const DEFAULT_THEME: KioskTheme = {
     ticketFooter: '',
     ticketShowTva: false,
     deliveryModes: 'both',
+    showRefreshButton: false,
+    showInlineCart: false,
 };
 
 const THEME_CACHE_KEY = 'kiosk_theme_cache';
@@ -115,6 +119,8 @@ export function KioskThemeProvider({ children }: { children: React.ReactNode }) 
                 ticketFooter:       data.ticket_footer || '',
                 ticketShowTva:      data.ticket_show_tva ?? false,
                 deliveryModes:      (data.delivery_modes as 'both' | 'sur_place_only' | 'emporter_only') || 'both',
+                showRefreshButton:  data.show_refresh_button ?? false,
+                showInlineCart:     data.show_inline_cart ?? false,
             };
             setTheme(newTheme);
             await AsyncStorage.setItem(cacheKey, JSON.stringify(newTheme));
@@ -126,19 +132,21 @@ export function KioskThemeProvider({ children }: { children: React.ReactNode }) 
 
     useEffect(() => {
         async function init() {
-            const restaurantId = getRestaurantId();
-            const cacheKey = restaurantId ? `${THEME_CACHE_KEY}_${restaurantId}` : THEME_CACHE_KEY;
-
-            // 1. Affichage immédiat depuis le cache
+            // Serveur en priorité (source de vérité), cache en fallback
             try {
-                const cached = await AsyncStorage.getItem(cacheKey);
-                if (cached) {
-                    setTheme({ ...DEFAULT_THEME, ...JSON.parse(cached) });
-                }
-            } catch {}
-
-            // 2. Fetch API pour avoir les données fraîches
-            await fetchTheme();
+                await fetchTheme();
+            } catch {
+                // Serveur inaccessible → utiliser le cache
+                const restaurantId = getRestaurantId();
+                const cacheKey = restaurantId ? `${THEME_CACHE_KEY}_${restaurantId}` : THEME_CACHE_KEY;
+                try {
+                    const cached = await AsyncStorage.getItem(cacheKey);
+                    if (cached) {
+                        setTheme({ ...DEFAULT_THEME, ...JSON.parse(cached) });
+                        console.log('[KioskTheme] ⚠️ Serveur inaccessible — cache utilisé');
+                    }
+                } catch {}
+            }
         }
 
         init();

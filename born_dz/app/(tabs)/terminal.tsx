@@ -41,7 +41,7 @@ export default function MenuScreen() {
   const [isInactivityModalVisible, setIsInactivityModalVisible] = useState(false);
 
   // Hook de synchronisation
-  const { categories, menus, isLoading } = useBorneSync();
+  const { categories, menus, isLoading, fetchAndCacheAllData } = useBorneSync();
 
   // ── Fidélité ──────────────────────────────────────────────────────
   const [loyaltyPoints, setLoyaltyPoints] = useState<number | null>(null);
@@ -49,6 +49,19 @@ export default function MenuScreen() {
   const [loyaltyLoading, setLoyaltyLoading] = useState(false);
   const [redeemingId, setRedeemingId] = useState<number | null>(null);
   const [redeemSuccess, setRedeemSuccess] = useState<string | null>(null);
+
+  // Refresh & Inline cart
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [cartItems, setCartItems] = useState<any[]>([]);
+  const [cartTotal, setCartTotal] = useState(0);
+
+  const handleRefreshMenu = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchAndCacheAllData(true);
+    } catch (e) { console.warn('[Refresh] Erreur:', e); }
+    finally { setIsRefreshing(false); }
+  };
 
   // Variables de Timer
   const mainTimerRef = useRef(null);
@@ -135,9 +148,14 @@ export default function MenuScreen() {
     try {
       const existingOrders = JSON.parse(await AsyncStorage.getItem("orderList") || "[]");
       const count = existingOrders.reduce((total, item) => total + (item.quantity || 1), 0);
+      const total = existingOrders.reduce((sum, item) => sum + (parseFloat(item.price) || 0) * (item.quantity || 1), 0);
       setCartCount(count);
+      setCartItems(existingOrders);
+      setCartTotal(total);
     } catch {
       setCartCount(0);
+      setCartItems([]);
+      setCartTotal(0);
     }
   };
 
@@ -636,6 +654,19 @@ export default function MenuScreen() {
           <Image source={require('@/assets/logo.png')} style={styles.logoImage} resizeMode="contain" />
         )}
         <View style={styles.headerRight}>
+          {theme.showRefreshButton && (
+            <TouchableOpacity
+              style={styles.cartButton}
+              onPress={handleRefreshMenu}
+              disabled={isRefreshing}
+              activeOpacity={0.7}
+            >
+              {isRefreshing
+                ? <ActivityIndicator size={24} color="white" />
+                : <Ionicons name="refresh" size={28} color="white" />
+              }
+            </TouchableOpacity>
+          )}
           <LanguageSelector />
           <TouchableOpacity style={styles.cartButton} onPress={() => router.push("/cart")}>
             <Feather name="shopping-cart" size={35} color="white" />
@@ -850,6 +881,28 @@ export default function MenuScreen() {
         </View>}
       </View>
 
+      {/* ── Panier inline en bas de page ── */}
+      {theme.showInlineCart && cartCount > 0 && (
+        <TouchableOpacity
+          style={[inlineCartStyles.bar, { backgroundColor: theme.primaryColor }]}
+          onPress={() => router.push("/cart")}
+          activeOpacity={0.9}
+        >
+          <View style={inlineCartStyles.left}>
+            <View style={inlineCartStyles.badge}>
+              <Text style={[inlineCartStyles.badgeText, { color: theme.primaryColor }]}>{cartCount}</Text>
+            </View>
+            <Text style={inlineCartStyles.label}>
+              {cartCount === 1 ? '1 article' : `${cartCount} articles`}
+            </Text>
+          </View>
+          <Text style={inlineCartStyles.total}>{cartTotal.toFixed(0)} DA</Text>
+          <View style={inlineCartStyles.arrow}>
+            <Feather name="chevron-right" size={22} color="white" />
+          </View>
+        </TouchableOpacity>
+      )}
+
       <ChoiceModal />
       <InactivityModal />
 
@@ -857,20 +910,23 @@ export default function MenuScreen() {
       <Modal animationType="fade" transparent visible={compVisible} onRequestClose={() => setCompVisible(false)}>
         <View style={compStyles.overlay}>
           <View style={compStyles.card}>
-            <View style={[compStyles.header, { backgroundColor: theme.primaryColor }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={compStyles.headerTitle} numberOfLines={1}>
-                  {compIsSolo ? `${compItem?.name} (Solo)` : compItem?.name}
-                </Text>
-                <Text style={compStyles.headerSub}>{compDoneCount}/{compSteps.length} étape{compSteps.length > 1 ? 's' : ''} complète{compSteps.length > 1 ? 's' : ''}</Text>
+            {/* Header — masqué pour les articles sans étapes */}
+            {compSteps.length > 0 ? (
+              <View style={[compStyles.header, { backgroundColor: theme.primaryColor }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={compStyles.headerTitle} numberOfLines={1}>
+                    {compIsSolo ? `${compItem?.name} (Solo)` : compItem?.name}
+                  </Text>
+                  <Text style={compStyles.headerSub}>{compDoneCount}/{compSteps.length} étape{compSteps.length > 1 ? 's' : ''} complète{compSteps.length > 1 ? 's' : ''}</Text>
+                </View>
+                <View style={compStyles.priceBadge}>
+                  <Text style={[compStyles.priceText, { color: theme.primaryColor }]}>{compTotalPrice.toFixed(0)} DA</Text>
+                </View>
+                <TouchableOpacity onPress={() => setCompVisible(false)} style={compStyles.closeBtn}>
+                  <Feather name="x" size={22} color="white" />
+                </TouchableOpacity>
               </View>
-              <View style={compStyles.priceBadge}>
-                <Text style={[compStyles.priceText, { color: theme.primaryColor }]}>{compTotalPrice.toFixed(0)} DA</Text>
-              </View>
-              <TouchableOpacity onPress={() => setCompVisible(false)} style={compStyles.closeBtn}>
-                <Feather name="x" size={22} color="white" />
-              </TouchableOpacity>
-            </View>
+            ) : null}
 
             {compSteps.length > 0 && (
               <View style={compStyles.progressRow}>
@@ -886,8 +942,24 @@ export default function MenuScreen() {
                 <Text style={{ color: '#64748B', marginTop: 16, fontSize: 18 }}>Chargement des options...</Text>
               </View>
             ) : compSteps.length === 0 ? (
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                <Text style={{ color: '#64748B', fontSize: 18 }}>Aucune option à configurer</Text>
+              /* Article sans options — fiche produit avec image */
+              <View style={{ flex: 1 }}>
+                <View style={{ backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center', paddingVertical: 30, paddingHorizontal: 20, flex: 1 }}>
+                  {compItem?.photo_url ? (
+                    <Image source={{ uri: compItem.photo_url }} style={{ width: '65%', height: '100%', maxHeight: 320 }} resizeMode="contain" />
+                  ) : (
+                    <View style={{ width: 180, height: 180, borderRadius: 24, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' }}>
+                      <Feather name="package" size={72} color="#94a3b8" />
+                    </View>
+                  )}
+                </View>
+                <View style={{ paddingHorizontal: 24, paddingVertical: 20 }}>
+                  <Text style={{ fontSize: 26, fontWeight: '800', color: theme.textColor }}>{compItem?.name}</Text>
+                  {compItem?.description ? (
+                    <Text style={{ fontSize: 16, color: '#64748B', marginTop: 6 }}>{compItem.description}</Text>
+                  ) : null}
+                  <View style={{ height: 1, backgroundColor: '#E2E8F0', marginVertical: 18 }} />
+                </View>
               </View>
             ) : (
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, gap: 32 }} showsVerticalScrollIndicator={false}>
@@ -930,16 +1002,36 @@ export default function MenuScreen() {
             )}
 
             <View style={compStyles.footer}>
-              <TouchableOpacity
-                style={[compStyles.addBtn, { backgroundColor: compIsComplete ? '#22C55E' : '#CBD5E1' }]}
-                onPress={handleCompConfirm}
-                disabled={!compIsComplete}
-              >
-                <Feather name="shopping-cart" size={24} color="white" />
-                <Text style={compStyles.addBtnText}>
-                  {compIsComplete ? `Ajouter au panier — ${compTotalPrice.toFixed(0)} DA` : `Complétez toutes les étapes (${compDoneCount}/${compSteps.length})`}
-                </Text>
-              </TouchableOpacity>
+              {compSteps.length === 0 ? (
+                /* Articles sans options — boutons Annuler / Ajouter côte à côte */
+                <View style={{ flexDirection: 'row', gap: 14 }}>
+                  <TouchableOpacity
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 16, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: 'white' }}
+                    onPress={() => setCompVisible(false)}
+                  >
+                    <Feather name="x" size={20} color="#64748B" />
+                    <Text style={{ color: '#64748B', fontWeight: '700', fontSize: 17 }}>Annuler</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 16, borderRadius: 16, backgroundColor: '#22C55E' }}
+                    onPress={handleCompConfirm}
+                  >
+                    <Feather name="shopping-cart" size={20} color="white" />
+                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 17 }}>Ajouter — {compTotalPrice.toFixed(0)} DA</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[compStyles.addBtn, { backgroundColor: compIsComplete ? '#22C55E' : '#CBD5E1' }]}
+                  onPress={handleCompConfirm}
+                  disabled={!compIsComplete}
+                >
+                  <Feather name="shopping-cart" size={24} color="white" />
+                  <Text style={compStyles.addBtnText}>
+                    {compIsComplete ? `Ajouter au panier — ${compTotalPrice.toFixed(0)} DA` : `Complétez toutes les étapes (${compDoneCount}/${compSteps.length})`}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         </View>
@@ -1140,4 +1232,21 @@ const compStyles = StyleSheet.create({
   footer: { padding: 20, borderTopWidth: 1, borderTopColor: "#E2E8F0" },
   addBtn: { height: 65, borderRadius: 20, flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 12 },
   addBtnText: { color: "white", fontWeight: "800", fontSize: 18 },
+});
+
+const inlineCartStyles = StyleSheet.create({
+  bar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 24, paddingVertical: 14,
+    elevation: 10, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12,
+  },
+  left: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  badge: {
+    backgroundColor: 'white', borderRadius: 14, minWidth: 28, height: 28,
+    justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8,
+  },
+  badgeText: { fontWeight: '900', fontSize: 14 },
+  label: { color: 'white', fontSize: 16, fontWeight: '700' },
+  total: { color: 'white', fontSize: 22, fontWeight: '900' },
+  arrow: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: 6 },
 });
