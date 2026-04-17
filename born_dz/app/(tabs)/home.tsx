@@ -3,24 +3,23 @@ import { useRouter } from "expo-router";
 import { Feather, MaterialIcons } from '@expo/vector-icons';
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSelector } from "@/components/LanguageSelector"; // Si vous l'avez créé
+import { useKioskTheme } from "@/contexts/KioskThemeContext";
 
-// Assurez-vous que le chemin du logo est correct
-const LOGO_SOURCE = require('@/assets/logo.png');
+const LOGO_FALLBACK = require('@/assets/logo.png');
 
 export default function HomeScreen() {
   const router = useRouter();
-  // Si vous n'avez pas encore le contexte de langue ici, vous pouvez retirer ces lignes
-  // const { t } = useLanguage(); 
+  const theme = useKioskTheme();
 
   return (
     <View style={styles.main}>
         
-        {/* Header avec Logo et Langue */}
+        {/* Header avec Logo (depuis le thème kiosk, sinon fallback) */}
         <View style={styles.header}>
-            <Image 
-                source={LOGO_SOURCE} 
-                style={styles.logo} 
-                resizeMode="contain" 
+            <Image
+                source={theme.logoUrl ? { uri: theme.logoUrl } : LOGO_FALLBACK}
+                style={styles.logo}
+                resizeMode="contain"
             />
             {/* On peut remettre le sélecteur de langue ici si besoin */}
             {/* <LanguageSelector /> */}
@@ -76,19 +75,18 @@ const styles = StyleSheet.create({
         backgroundColor: "#F8F9FA", // Fond blanc cassé très léger pour le premium
     },
     header: {
-        height: "15%",
+        height: 80,
         width: "100%",
         justifyContent: "center",
         alignItems: "center",
-        paddingTop: 40,
         backgroundColor: "white",
         borderBottomWidth: 1,
         borderBottomColor: "#E2E8F0",
         elevation: 2,
     },
     logo: {
-        width: 200,
-        height: 60,
+        width: 120,
+        height: 50,
     },
     container: {
         flex: 1,

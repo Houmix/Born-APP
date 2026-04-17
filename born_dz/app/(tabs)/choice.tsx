@@ -7,7 +7,7 @@ import { getPosUrl, getRestaurantId } from "@/utils/serverConfig";
 import { useEffect } from "react";
 import { useKioskTheme } from "@/contexts/KioskThemeContext";
 
-const LOGO_SOURCE = require('@/assets/logo.png');
+const LOGO_FALLBACK = require('@/assets/logo.png');
 
 export default function IndexScreen() {
   const router = useRouter();
@@ -50,12 +50,12 @@ export default function IndexScreen() {
   return (
     <View style={[styles.main, { backgroundColor: theme.backgroundColor }]}>
       
-      {/* Header avec Logo */}
+      {/* Header avec Logo (depuis le thème kiosk, sinon fallback) */}
       <View style={styles.header}>
-        <Image 
-            source={LOGO_SOURCE} 
-            style={styles.logo} 
-            resizeMode="contain" 
+        <Image
+            source={theme.logoUrl ? { uri: theme.logoUrl } : LOGO_FALLBACK}
+            style={styles.logo}
+            resizeMode="contain"
         />
       </View>
 
@@ -109,19 +109,18 @@ const styles = StyleSheet.create({
         flex: 1,
     },
     header: {
-        height: "15%",
+        height: 80,
         width: "100%",
         justifyContent: "center",
         alignItems: "center",
         backgroundColor: "white",
         borderBottomWidth: 1,
         borderBottomColor: "#E2E8F0",
-        paddingTop: 20,
         elevation: 2,
     },
     logo: {
-        width: 250,
-        height: 150,
+        width: 120,
+        height: 50,
     },
     contentContainer: {
         flex: 1,
