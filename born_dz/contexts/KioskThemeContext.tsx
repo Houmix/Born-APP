@@ -124,7 +124,8 @@ export function KioskThemeProvider({ children }: { children: React.ReactNode }) 
             };
             setTheme(newTheme);
             await AsyncStorage.setItem(cacheKey, JSON.stringify(newTheme));
-            console.log('[KioskTheme] ✅ Thème rechargé :', newTheme.primaryColor, newTheme.cardStyle);
+            console.log('[KioskTheme] ✅ Thème rechargé :', newTheme.primaryColor, newTheme.cardStyle,
+                '| refreshBtn:', newTheme.showRefreshButton, '| inlineCart:', newTheme.showInlineCart);
         } catch (err: any) {
             console.warn('[KioskTheme] Erreur fetch :', err?.message || err);
         }
