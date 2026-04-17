@@ -16,7 +16,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from 'expo-linear-gradient';
 import Feather from '@expo/vector-icons/Feather';
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, AntDesign } from "@expo/vector-icons";
 import axios from "axios";
 import { useBorneSync } from "@/hooks/useBorneSync.js";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -25,6 +25,7 @@ import { useKioskTheme } from "@/contexts/KioskThemeContext";
 import { getPosUrl, getRestaurantId } from "@/utils/serverConfig";
 
 const LOYALTY_TAB = '__loyalty__';
+const SCREEN_WIDTH = Dimensions.get("window").width;
 
 export default function MenuScreen() {
   const router = useRouter();
@@ -54,6 +55,11 @@ export default function MenuScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cartItems, setCartItems] = useState<any[]>([]);
   const [cartTotal, setCartTotal] = useState(0);
+
+  // Cross-sell pour le panier inline
+  const [crossSellItems, setCrossSellItems] = useState<any[]>([]);
+  const [showCrossSell, setShowCrossSell] = useState(false);
+  const [crossSellQty, setCrossSellQty] = useState<Record<number, number>>({});
 
   const handleRefreshMenu = async () => {
     setIsRefreshing(true);
@@ -159,6 +165,118 @@ export default function MenuScreen() {
     }
   };
 
+  // ── Fonctions panier inline ──
+  const getMenuImage = useCallback((menuId: number) => {
+    return menus.find((m: any) => m.id === menuId)?.photo_url || null;
+  }, [menus]);
+
+  const calcItemPrice = (item: any) => {
+    const base = parseFloat(item.price) || 0;
+    const extras = item.steps?.reduce((sum: number, step: any) =>
+      sum + step.selectedOptions.reduce((s: number, o: any) => s + (parseFloat(o.optionPrice) || 0), 0)
+    , 0) || 0;
+    return base + extras;
+  };
+
+  const inlineTotal = useMemo(() => {
+    return cartItems.reduce((acc, item) => acc + calcItemPrice(item) * (item.quantity || 1), 0);
+  }, [cartItems]);
+
+  const inlineChangeQty = async (index: number, delta: number) => {
+    const item = cartItems[index];
+    if (item?.isReward && delta > 0) return;
+    const newList = [...cartItems];
+    const newQty = newList[index].quantity + delta;
+    if (newQty > 0) {
+      newList[index].quantity = newQty;
+    } else {
+      newList.splice(index, 1);
+    }
+    setCartItems(newList);
+    setCartCount(newList.reduce((t, i) => t + (i.quantity || 1), 0));
+    setCartTotal(newList.reduce((s, i) => s + (parseFloat(i.price) || 0) * (i.quantity || 1), 0));
+    await AsyncStorage.setItem("orderList", JSON.stringify(newList));
+  };
+
+  const inlineRemoveItem = async (index: number) => {
+    const item = cartItems[index];
+    if (item?.isReward) {
+      try {
+        const raw = await AsyncStorage.getItem("pendingRewards");
+        if (raw) {
+          const pending = JSON.parse(raw).filter((r: any) => r.rewardId !== item.rewardId);
+          await AsyncStorage.setItem("pendingRewards", JSON.stringify(pending));
+        }
+      } catch {}
+    }
+    const newList = cartItems.filter((_, i) => i !== index);
+    setCartItems(newList);
+    setCartCount(newList.reduce((t, i) => t + (i.quantity || 1), 0));
+    setCartTotal(newList.reduce((s, i) => s + (parseFloat(i.price) || 0) * (i.quantity || 1), 0));
+    await AsyncStorage.setItem("orderList", JSON.stringify(newList));
+  };
+
+  const fetchCrossSellItems = async () => {
+    try {
+      const restaurantId = getRestaurantId();
+      if (!restaurantId) return;
+      const res = await axios.get(`${getPosUrl()}/menu/api/crosssell/?restaurant_id=${restaurantId}`, { timeout: 4000 });
+      setCrossSellItems(res.data || []);
+    } catch {}
+  };
+
+  const handleInlineValidate = async () => {
+    // Recharger les cross-sell au cas où ils ont changé
+    try {
+      const restaurantId = getRestaurantId();
+      if (restaurantId) {
+        const res = await axios.get(`${getPosUrl()}/menu/api/crosssell/?restaurant_id=${restaurantId}`, { timeout: 4000 });
+        const items = res.data || [];
+        setCrossSellItems(items);
+        if (items.length > 0) {
+          setCrossSellQty({});
+          setShowCrossSell(true);
+          return;
+        }
+      }
+    } catch {}
+    inlineProceedToPayment(cartItems);
+  };
+
+  const adjustCrossSellQty = (id: number, delta: number) => {
+    setCrossSellQty(prev => {
+      const next = Math.max(0, (prev[id] || 0) + delta);
+      return { ...prev, [id]: next };
+    });
+  };
+
+  const handleCrossSellConfirm = async () => {
+    const newItems = Object.entries(crossSellQty)
+      .filter(([, qty]) => (qty as number) > 0)
+      .map(([id, qty]) => {
+        const item = crossSellItems.find(i => i.id === parseInt(id));
+        return { menuId: item.id, menuName: item.name, price: parseFloat(item.price), quantity: qty, extra: true, solo: false, steps: [] };
+      });
+    const updatedList = [...cartItems, ...newItems];
+    await AsyncStorage.setItem("orderList", JSON.stringify(updatedList));
+    setShowCrossSell(false);
+    inlineProceedToPayment(updatedList);
+  };
+
+  const inlineProceedToPayment = async (list: any[]) => {
+    const formattedOrder = list
+      .filter(order => !order.isReward)
+      .map(order => ({
+        menu: order.menuId, quantity: order.quantity,
+        solo: order.solo === true, extra: order.extra === true,
+        options: order.steps?.flatMap((s: any) => s.selectedOptions.map((o: any) => ({ step: s.stepId, option: o.optionId }))) || [],
+      }));
+    const rewardNames = list.filter(o => o.isReward).map(o => o.menuName?.replace('🎁 ', '') || 'Récompense fidélité');
+    await AsyncStorage.setItem("pendingOrder", JSON.stringify(formattedOrder));
+    await AsyncStorage.setItem("pendingRewardNames", JSON.stringify(rewardNames));
+    router.push("/location");
+  };
+
   const loadLoyalty = async () => {
     setLoyaltyLoading(true);
     setRedeemSuccess(null);
@@ -240,6 +358,7 @@ export default function MenuScreen() {
 
   useEffect(() => {
     updateCartCount();
+    fetchCrossSellItems();
     if (categories.length > 0 && !selectedCategory) {
       setSelectedCategory(categories[0]);
     }
@@ -881,27 +1000,128 @@ export default function MenuScreen() {
         </View>}
       </View>
 
-      {/* ── Panier inline en bas de page ── */}
+      {/* ── Panier inline complet ── */}
       {theme.showInlineCart && cartCount > 0 && (
-        <TouchableOpacity
-          style={[inlineCartStyles.bar, { backgroundColor: theme.primaryColor }]}
-          onPress={() => router.push("/cart")}
-          activeOpacity={0.9}
-        >
-          <View style={inlineCartStyles.left}>
-            <View style={inlineCartStyles.badge}>
-              <Text style={[inlineCartStyles.badgeText, { color: theme.primaryColor }]}>{cartCount}</Text>
+        <View style={icp.panel}>
+          <View style={icp.header}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Feather name="shopping-cart" size={20} color={theme.primaryColor} />
+              <Text style={[icp.headerTitle, { color: theme.textColor }]}>
+                Mon panier ({cartCount})
+              </Text>
             </View>
-            <Text style={inlineCartStyles.label}>
-              {cartCount === 1 ? '1 article' : `${cartCount} articles`}
-            </Text>
+            <Text style={[icp.headerTotal, { color: theme.primaryColor }]}>{inlineTotal.toLocaleString()} DA</Text>
           </View>
-          <Text style={inlineCartStyles.total}>{cartTotal.toFixed(0)} DA</Text>
-          <View style={inlineCartStyles.arrow}>
-            <Feather name="chevron-right" size={22} color="white" />
-          </View>
-        </TouchableOpacity>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={icp.list}>
+            {cartItems.map((item, index) => {
+              const imgUrl = getMenuImage(item.menuId);
+              const unitPrice = calcItemPrice(item);
+              return (
+                <View key={index} style={[icp.card, { backgroundColor: item.isReward ? '#FFF7ED' : theme.cardBgColor }]}>
+                  <TouchableOpacity onPress={() => inlineRemoveItem(index)} style={icp.deleteBadge}>
+                    <Feather name="x" size={12} color="white" />
+                  </TouchableOpacity>
+                  {imgUrl ? (
+                    <Image source={{ uri: imgUrl }} style={icp.cardImage} resizeMode="contain" />
+                  ) : (
+                    <View style={[icp.cardImage, icp.cardImagePlaceholder]}>
+                      <Ionicons name="fast-food" size={24} color="#94a3b8" />
+                    </View>
+                  )}
+                  <View style={icp.cardDetails}>
+                    <Text style={[icp.cardName, { color: theme.textColor }]} numberOfLines={2}>{item.menuName}</Text>
+                    {item.steps?.length > 0 && (
+                      <Text style={icp.cardOptions} numberOfLines={2}>
+                        {item.steps.flatMap((s: any) => s.selectedOptions.map((o: any) => o.optionName)).join(', ')}
+                      </Text>
+                    )}
+                    <Text style={[icp.cardPrice, { color: theme.primaryColor }]}>
+                      {item.isReward ? 'Offert' : `${(unitPrice * item.quantity).toLocaleString()} DA`}
+                    </Text>
+                    {!item.isReward && (
+                      <View style={icp.qtyControls}>
+                        <TouchableOpacity onPress={() => inlineChangeQty(index, -1)} style={icp.qtyBtn}>
+                          <AntDesign name="minus" size={13} color={theme.textColor} />
+                        </TouchableOpacity>
+                        <Text style={[icp.qtyValue, { color: theme.textColor }]}>{item.quantity}</Text>
+                        <TouchableOpacity onPress={() => inlineChangeQty(index, 1)} style={icp.qtyBtn}>
+                          <AntDesign name="plus" size={13} color={theme.textColor} />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+
+          <TouchableOpacity
+            style={[icp.validateBtn, { backgroundColor: '#22C55E' }]}
+            onPress={handleInlineValidate}
+            activeOpacity={0.85}
+          >
+            <Text style={icp.validateText}>Valider la commande</Text>
+            <AntDesign name="arrowright" size={22} color="white" />
+          </TouchableOpacity>
+        </View>
       )}
+
+      {/* ── Modal Cross-sell (inline cart) ── */}
+      <Modal visible={showCrossSell} transparent animationType="slide" onRequestClose={() => setShowCrossSell(false)}>
+        <View style={csInline.overlay}>
+          <View style={csInline.sheet}>
+            <Text style={[csInline.title, { color: theme.primaryColor }]}>Et avec ça ?</Text>
+            <Text style={csInline.subtitle}>Ajoutez quelque chose à votre commande</Text>
+            <ScrollView contentContainerStyle={csInline.grid} showsVerticalScrollIndicator={false}>
+              {crossSellItems.map(item => {
+                const qty = crossSellQty[item.id] || 0;
+                return (
+                  <View key={item.id} style={[csInline.card, { backgroundColor: theme.cardBgColor }]}>
+                    {item.photo_url ? (
+                      <Image source={{ uri: item.photo_url }} style={csInline.img} resizeMode="contain" />
+                    ) : (
+                      <View style={[csInline.img, { backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' }]}>
+                        <Ionicons name="fast-food" size={36} color="#94a3b8" />
+                      </View>
+                    )}
+                    <Text style={[csInline.name, { color: theme.textColor }]} numberOfLines={2}>{item.name}</Text>
+                    <Text style={[csInline.price, { color: theme.primaryColor }]}>{item.price} DA</Text>
+                    <View style={{ alignItems: 'center', width: '100%' }}>
+                      {qty === 0 ? (
+                        <TouchableOpacity style={[csInline.addBtn, { backgroundColor: theme.primaryColor }]} onPress={() => adjustCrossSellQty(item.id, 1)}>
+                          <AntDesign name="plus" size={20} color="white" />
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={csInline.qtyRow}>
+                          <TouchableOpacity style={csInline.qtyBtn} onPress={() => adjustCrossSellQty(item.id, -1)}>
+                            <AntDesign name="minus" size={16} color={theme.textColor} />
+                          </TouchableOpacity>
+                          <Text style={[csInline.qtyValue, { color: theme.textColor }]}>{qty}</Text>
+                          <TouchableOpacity style={csInline.qtyBtn} onPress={() => adjustCrossSellQty(item.id, 1)}>
+                            <AntDesign name="plus" size={16} color={theme.textColor} />
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+            <View style={csInline.footer}>
+              <TouchableOpacity style={csInline.skipBtn} onPress={() => { setShowCrossSell(false); inlineProceedToPayment(cartItems); }}>
+                <Text style={csInline.skipText}>Non merci</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[csInline.confirmBtn, { backgroundColor: '#22C55E' }]} onPress={handleCrossSellConfirm}>
+                <Text style={csInline.confirmText}>
+                  {Object.values(crossSellQty).some(q => q > 0) ? 'Ajouter et continuer' : 'Continuer'}
+                </Text>
+                <AntDesign name="arrowright" size={18} color="white" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <ChoiceModal />
       <InactivityModal />
@@ -1234,19 +1454,83 @@ const compStyles = StyleSheet.create({
   addBtnText: { color: "white", fontWeight: "800", fontSize: 18 },
 });
 
-const inlineCartStyles = StyleSheet.create({
-  bar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 24, paddingVertical: 14,
-    elevation: 10, shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 12,
+// ── Styles panier inline complet ──
+const icp = StyleSheet.create({
+  panel: {
+    backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    elevation: 20, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16,
+    paddingBottom: 8,
   },
-  left: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  badge: {
-    backgroundColor: 'white', borderRadius: 14, minWidth: 28, height: 28,
-    justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8,
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 20, paddingTop: 14, paddingBottom: 10,
+    borderBottomWidth: 1, borderBottomColor: '#F1F5F9',
   },
-  badgeText: { fontWeight: '900', fontSize: 14 },
-  label: { color: 'white', fontSize: 16, fontWeight: '700' },
-  total: { color: 'white', fontSize: 22, fontWeight: '900' },
-  arrow: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: 6 },
+  headerTitle: { fontSize: 16, fontWeight: '800' },
+  headerTotal: { fontSize: 18, fontWeight: '900' },
+  list: { paddingHorizontal: 12, paddingVertical: 10, gap: 10 },
+  card: {
+    width: 200, flexDirection: 'row', padding: 8, borderRadius: 14,
+    borderWidth: 1, borderColor: '#F1F5F9', position: 'relative', gap: 10,
+  },
+  deleteBadge: {
+    position: 'absolute', top: -6, right: -6, zIndex: 10,
+    width: 22, height: 22, borderRadius: 11, backgroundColor: '#EF4444',
+    justifyContent: 'center', alignItems: 'center',
+    elevation: 4, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 4,
+  },
+  cardImage: { width: 64, height: 64, borderRadius: 10 },
+  cardImagePlaceholder: { backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
+  cardDetails: { flex: 1, justifyContent: 'center', gap: 2 },
+  cardName: { fontSize: 12, fontWeight: '700', lineHeight: 15 },
+  cardOptions: { fontSize: 10, color: '#94a3b8', lineHeight: 13 },
+  cardPrice: { fontSize: 13, fontWeight: '800', marginTop: 2 },
+  qtyControls: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9',
+    borderRadius: 8, padding: 2,
+  },
+  qtyBtn: { width: 26, height: 26, justifyContent: 'center', alignItems: 'center' },
+  qtyValue: { fontSize: 13, fontWeight: '800', marginHorizontal: 6 },
+  validateBtn: {
+    marginHorizontal: 16, marginTop: 6, height: 50, borderRadius: 16,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10,
+  },
+  validateText: { color: 'white', fontSize: 17, fontWeight: '800' },
+});
+
+// ── Styles cross-sell modal (inline) ──
+const csInline = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: 'white', borderTopLeftRadius: 36, borderTopRightRadius: 36,
+    paddingTop: 28, paddingHorizontal: 22, paddingBottom: 34, maxHeight: '82%',
+  },
+  title: { fontSize: 30, fontWeight: '900', textAlign: 'center', marginBottom: 4 },
+  subtitle: { fontSize: 15, color: '#64748B', textAlign: 'center', marginBottom: 20 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, paddingBottom: 10 },
+  card: {
+    width: (SCREEN_WIDTH - 72) / 3, borderRadius: 18, padding: 12, alignItems: 'center',
+    elevation: 3, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6,
+  },
+  img: { width: '100%', height: 90, borderRadius: 12, marginBottom: 8, backgroundColor: 'white' },
+  name: { fontSize: 13, fontWeight: '700', textAlign: 'center', marginBottom: 3 },
+  price: { fontSize: 14, fontWeight: '800', marginBottom: 8 },
+  addBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+  qtyRow: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9',
+    borderRadius: 10, padding: 2,
+  },
+  qtyBtn: { width: 32, height: 32, justifyContent: 'center', alignItems: 'center' },
+  qtyValue: { fontSize: 15, fontWeight: '700', marginHorizontal: 8 },
+  footer: { flexDirection: 'row', gap: 12, marginTop: 18 },
+  skipBtn: {
+    flex: 1, height: 58, borderRadius: 16, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+  skipText: { fontSize: 16, fontWeight: '700', color: '#64748B' },
+  confirmBtn: {
+    flex: 2, height: 58, borderRadius: 16, flexDirection: 'row',
+    justifyContent: 'center', alignItems: 'center', gap: 8,
+  },
+  confirmText: { fontSize: 16, fontWeight: '800', color: 'white' },
 });
